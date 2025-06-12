@@ -13,22 +13,22 @@ import { ChatbotUIContext } from "@/context/context"
 import {
   createAssistantCollection,
   deleteAssistantCollection,
-  getAssistantCollectionsByAssistantId
+  getCollectionsByAssistantId
 } from "@/db/assistant-collections"
 import {
   createAssistantFile,
   deleteAssistantFile,
-  getAssistantFilesByAssistantId
+  getFilesByAssistantId
 } from "@/db/assistant-files"
 import {
   createAssistantTool,
   deleteAssistantTool,
-  getAssistantToolsByAssistantId
+  getToolsByAssistantId
 } from "@/db/assistant-tools"
 import {
   createAssistantWorkspaces,
   deleteAssistantWorkspace,
-  getAssistantWorkspacesByAssistantId,
+  getWorkspacesByAssistantId,
   updateAssistant
 } from "@/db/assistants"
 import { updateChat } from "@/db/chats"
@@ -40,31 +40,31 @@ import {
 import {
   createCollectionWorkspaces,
   deleteCollectionWorkspace,
-  getCollectionWorkspacesByCollectionId,
+  getWorkspacesByCollectionId,
   updateCollection
 } from "@/db/collections"
 import {
   createFileWorkspaces,
   deleteFileWorkspace,
-  getFileWorkspacesByFileId,
+  getWorkspacesByFileId,
   updateFile
 } from "@/db/files"
 import {
   createModelWorkspaces,
   deleteModelWorkspace,
-  getModelWorkspacesByModelId,
+  getWorkspacesByModelId,
   updateModel
 } from "@/db/models"
 import {
   createPresetWorkspaces,
   deletePresetWorkspace,
-  getPresetWorkspacesByPresetId,
+  getWorkspacesByPresetId,
   updatePreset
 } from "@/db/presets"
 import {
   createPromptWorkspaces,
   deletePromptWorkspace,
-  getPromptWorkspacesByPromptId,
+  getWorkspacesByPromptId,
   updatePrompt
 } from "@/db/prompts"
 import {
@@ -74,7 +74,7 @@ import {
 import {
   createToolWorkspaces,
   deleteToolWorkspace,
-  getToolWorkspacesByToolId,
+  getWorkspacesByToolId,
   updateTool
 } from "@/db/tools"
 import { convertBlobToBase64 } from "@/lib/blob-to-b64"

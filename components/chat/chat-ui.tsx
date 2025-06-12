@@ -60,8 +60,12 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!params.chatid) {
+      // No chat ID in URL: use context (e.g. new chat) and stop loading
+      setLoading(false)
+      return
+    }
     const fetchData = async () => {
-      if (!params.chatid) return
       const res = await fetch(`/api/chat-data?chatId=${params.chatid}`)
       if (!res.ok) {
         console.error('Failed to load chat data:', res.statusText)
@@ -69,7 +73,6 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
         return
       }
       const { chat, assistantTools, messages, messageFileItems, chatFiles } = await res.json()
-      // Hydrate chat messages with file item IDs
       const hydratedMessages = messages.map((msg: any) => ({
         message: msg,
         fileItems: messageFileItems
@@ -79,7 +82,6 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
       setChatMessages(hydratedMessages)
       setChatFileItems(messageFileItems.flatMap((mfi: any) => mfi.file_items))
       setChatFiles(chatFiles)
-      // Assistant selection
       if (chat.assistant_id) {
         const assistant = assistants.find(a => a.id === chat.assistant_id)
         if (assistant) {
@@ -102,7 +104,7 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
       setLoading(false)
     }
     fetchData()
-  }, [])
+  }, [params.chatid])
 
 
   if (loading) {

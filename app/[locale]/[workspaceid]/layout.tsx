@@ -1,6 +1,7 @@
 "use client"
 
-import { Dashboard } from "@/components/ui/dashboard"
+// import Dashboard; temporarily disabled to avoid sidebar errors
+// import { Dashboard } from "@/components/ui/dashboard"
 import { ChatbotUIContext } from "@/context/context"
 // DB data is loaded via /api/workspace-data; helper to load only images
 import { getAssistantImageFromStorage } from "@/db/storage/assistant-images"
@@ -137,7 +138,9 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
           'You are a friendly, helpful AI assistant.',
         temperature: workspace.default_temperature || 0.5,
         contextLength: workspace.default_context_length || 4096,
-        includeProfileContext: workspace.include_profile_context || true
+        includeProfileContext: workspace.include_profile_context || true,
+        includeWorkspaceInstructions: workspace.include_workspace_instructions ?? true,
+        embeddingsProvider: (workspace.embeddings_provider as 'openai' | 'local') || 'openai'
       })
     } catch (err) {
       console.error('Error fetching workspace data:', err)
@@ -150,5 +153,6 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     return <Loading />
   }
 
-  return <Dashboard>{children}</Dashboard>
+  // Temporarily render children directly until sidebar is fixed
+  return <>{children}</>
 }

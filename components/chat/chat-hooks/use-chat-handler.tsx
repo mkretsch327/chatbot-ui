@@ -1,21 +1,209 @@
 "use client"
 import { useRouter } from "next/navigation"
-import { useRef } from "react"
+import { useRef, useContext } from "react"
+import { v4 as uuidv4 } from 'uuid'
+import { toast } from 'sonner'
+import { ChatbotUIContext } from '@/context/context'
 
 /**
  * Stub hook for chat handling; actual logic to be implemented server-side.
  */
 export const useChatHandler = () => {
   const router = useRouter()
-  const chatInputRef = useRef(null)
+  const {
+    profile,
+    userInput,
+    setUserInput,
+    chatMessages,
+    setChatMessages,
+    chatSettings,
+    selectedChat,
+    selectedWorkspace,
+    setSelectedChat,
+    setIsGenerating
+  } = useContext(ChatbotUIContext)
+  const chatInputRef = useRef<HTMLTextAreaElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  const handleNewChat = () => {
+    router.push('/')
+  }
+
+  const handleFocusChatInput = () => {
+    chatInputRef.current?.focus()
+  }
+
+  const handleStopMessage = () => {
+    abortControllerRef.current?.abort()
+    setIsGenerating(false)
+  }
+
+  const handleSendMessage = async (
+    messageContent: string,
+    _history: any[],
+    _regen: boolean
+  ) => {
+    if (!chatSettings || !messageContent.trim()) return
+    // Ensure a chat record exists
+    let chatId = selectedChat?.id
+    if (!selectedChat) {
+      if (!selectedWorkspace) {
+        toast.error('No workspace selected')
+        return
+      }
+      try {
+        const res = await fetch('/api/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspace_id: selectedWorkspace.id,
+            name: null,
+            model: chatSettings.model,
+            prompt: chatSettings.prompt,
+            temperature: chatSettings.temperature,
+            context_length: chatSettings.contextLength,
+            include_profile_context: chatSettings.includeProfileContext,
+            include_workspace_instructions: chatSettings.includeWorkspaceInstructions,
+            embeddings_provider: chatSettings.embeddingsProvider
+          })
+        })
+        if (!res.ok) throw new Error('Failed to create chat')
+        const newChat = await res.json()
+        setSelectedChat(newChat)
+        chatId = newChat.id
+      } catch (e) {
+        console.error(e)
+        toast.error('Unable to start chat')
+        return
+      }
+    }
+    setUserInput('')
+    // Add user message to UI
+    const userSeq = chatMessages.length
+    const userMsg = {
+      message: {
+        id: uuidv4(),
+        chat_id: chatId!,
+        user_id: profile?.user_id || '',
+        content: messageContent,
+        role: 'user',
+        model: chatSettings.model,
+        sequence_number: userSeq,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      fileItems: []
+    }
+    setChatMessages(prev => [...prev, userMsg])
+    // Persist user message
+    try {
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: selectedChat.id,
+          content: messageContent,
+          role: 'user',
+          sequence_number: userSeq,
+          model: chatSettings.model
+        })
+      })
+    } catch (e) {
+      console.error('Failed to save user message', e)
+    }
+
+    // Create assistant placeholder
+    const assistantSeq = userSeq + 1
+    const assistantMsgId = uuidv4()
+    const assistantMsg = {
+      message: {
+        id: assistantMsgId,
+        chat_id: chatId!,
+        user_id: profile?.user_id || '',
+        content: '',
+        role: 'assistant',
+        model: chatSettings.model,
+        sequence_number: assistantSeq,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      fileItems: []
+    }
+    setChatMessages(prev => [...prev, assistantMsg])
+    setIsGenerating(true)
+    // Call OpenAI stream
+    abortControllerRef.current = new AbortController()
+    try {
+      const res = await fetch('/api/chat/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatSettings,
+          messages: [
+            ...chatMessages.map(m => ({ role: m.message.role, content: m.message.content })),
+            { role: 'user', content: messageContent }
+          ]
+        }),
+        signal: abortControllerRef.current.signal
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(err.message || 'Error from API')
+        setIsGenerating(false)
+        return
+      }
+      const reader = res.body?.getReader()
+      if (!reader) return
+      const decoder = new TextDecoder()
+      let done = false
+      let assistantContent = ''
+      while (!done) {
+        const { value, done: doneReading } = await reader.read()
+        done = doneReading
+        if (value) {
+          const chunk = decoder.decode(value)
+          assistantContent += chunk
+          setChatMessages(prev => prev.map(msg =>
+            msg.message.id === assistantMsgId
+              ? { ...msg, message: { ...msg.message, content: assistantContent } }
+              : msg
+          ))
+        }
+      }
+      // Persist assistant message
+      try {
+        await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: selectedChat.id,
+            content: assistantContent,
+            role: 'assistant',
+            sequence_number: assistantSeq,
+            model: chatSettings.model
+          })
+        })
+      } catch (e) {
+        console.error('Failed to save assistant message', e)
+      }
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        toast.error('Generation aborted')
+      } else {
+        console.error(e)
+        toast.error('Error during chat')
+      }
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   return {
     chatInputRef,
-    prompt: '',
-    handleNewChat: () => router.push('/'),
-    handleSendMessage: (_message: string, _history: any[], _regen: boolean) => {},
-    handleFocusChatInput: () => {},
-    handleStopMessage: () => {},
-    handleSendEdit: (_edited: string, _seq: number) => {}
+    handleNewChat,
+    handleSendMessage,
+    handleFocusChatInput,
+    handleStopMessage
   }
 }
 

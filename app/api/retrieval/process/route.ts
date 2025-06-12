@@ -26,13 +26,6 @@ export async function POST(req: Request) {
     const embeddingsProvider = formData.get("embeddingsProvider") as string
 
     const fileMetadata = await getFileById(file_id)
-
-    if (metadataError) {
-      throw new Error(
-        `Failed to retrieve file metadata: ${metadataError.message}`
-      )
-    }
-
     if (!fileMetadata) {
       throw new Error("File not found")
     }

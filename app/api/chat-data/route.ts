@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getServerProfile } from '@/lib/server/server-chat-helpers'
 import { getChatById } from '@/db/chats'
-import { getAssistantToolsByAssistantId } from '@/db/assistant-tools'
+import { getToolsByAssistantId } from '@/db/assistant-tools'
 import { getMessagesByChatId } from '@/db/messages'
-import { getMessageFileItemsByMessageId } from '@/db/message-file-items'
-import { getChatFilesByChatId } from '@/db/chat-files'
+import { getFileItemsByMessageId } from '@/db/message-file-items'
+import { getFilesByChatId } from '@/db/chat-files'
 
 export const runtime = 'nodejs'
 
@@ -27,19 +27,18 @@ export async function GET(request: Request) {
     // Assistant tools
     let assistantTools: any[] = []
     if (chat.assistant_id) {
-      const toolsRes = await getAssistantToolsByAssistantId(chat.assistant_id)
-      assistantTools = toolsRes.tools
+      assistantTools = await getToolsByAssistantId(chat.assistant_id)
     }
     // Messages
     const messages = await getMessagesByChatId(chatId)
     // Message-file relations
     const messageFileItemsPromises = messages.map(msg =>
-      getMessageFileItemsByMessageId(msg.id)
+      getFileItemsByMessageId(msg.id)
     )
     const messageFileItems = await Promise.all(messageFileItemsPromises)
     // Chat files
-    const chatFilesRes = await getChatFilesByChatId(chatId)
-    const chatFiles = chatFilesRes.files.map((f: any) => ({ id: f.id, name: f.name, type: f.type, file: null }))
+    const chatFilesRes = await getFilesByChatId(chatId)
+    const chatFiles = chatFilesRes.map((f: any) => ({ id: f.id, name: f.name, type: f.type, file: null }))
 
     return NextResponse.json({ chat, assistantTools, messages, messageFileItems, chatFiles })
   } catch (err: any) {
