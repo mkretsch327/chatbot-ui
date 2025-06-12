@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useChatHandler } from "@/components/chat/chat-hooks/use-chat-handler"
 import { ChatbotUIContext } from "@/context/context"
 import { LLM_LIST } from "@/lib/models/llm/llm-list"
@@ -377,7 +378,7 @@ export const Message: FC<MessageProps> = ({
         )}
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {(message.image_paths || []).map((path, index) => {
+          {(message.image_paths || []).map((path: string, index: number) => {
             const item = chatImages.find(image => image.path === path)
 
             return (

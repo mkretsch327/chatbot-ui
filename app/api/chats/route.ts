@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerProfile } from '@/lib/server/server-chat-helpers'
-import { getChatsByWorkspaceId, createChat } from '@/db/chats'
+import { getChatsByWorkspaceId, createChat, updateChat } from '@/db/chats'
 
 export const runtime = 'nodejs'
 
@@ -25,10 +25,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const profile = await getServerProfile()
   const data = await request.json()
+  // Generate default chat name if not provided
+  const defaultName = data.name || `Chat ${new Date().toLocaleString()}`
   const chat = await createChat({
     user_id: profile.user_id,
     workspace_id: data.workspace_id,
-    name: data.name || null,
+    name: defaultName,
     model: data.model,
     prompt: data.prompt,
     temperature: data.temperature,
@@ -38,4 +40,12 @@ export async function POST(request: Request) {
     embeddings_provider: data.embeddings_provider
   })
   return NextResponse.json(chat)
+}
+// Update chat (e.g. rename)
+export async function PUT(request: Request) {
+  const data = await request.json()
+  const { id, ...updates } = data
+  // Only allow updating name
+  const updated = await updateChat(id, { name: updates.name })
+  return NextResponse.json(updated)
 }

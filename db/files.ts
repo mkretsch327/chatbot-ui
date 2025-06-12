@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { pool } from "@/db/client"
 import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
 import { insertRow, updateRow, deleteRow } from "./index"

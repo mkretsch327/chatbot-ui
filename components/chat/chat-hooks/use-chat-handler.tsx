@@ -1,5 +1,5 @@
 "use client"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { useRef, useContext } from "react"
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
@@ -10,6 +10,9 @@ import { ChatbotUIContext } from '@/context/context'
  */
 export const useChatHandler = () => {
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale as string
+  const workspaceid = params.workspaceid as string
   const {
     profile,
     userInput,
@@ -19,6 +22,7 @@ export const useChatHandler = () => {
     chatSettings,
     selectedChat,
     selectedWorkspace,
+    setChats,
     setSelectedChat,
     setIsGenerating
   } = useContext(ChatbotUIContext)
@@ -51,6 +55,7 @@ export const useChatHandler = () => {
         toast.error('No workspace selected')
         return
       }
+      let newChat: any
       try {
         const res = await fetch('/api/chats', {
           method: 'POST',
@@ -68,9 +73,13 @@ export const useChatHandler = () => {
           })
         })
         if (!res.ok) throw new Error('Failed to create chat')
-        const newChat = await res.json()
+        newChat = await res.json()
+        // update client-side chat list
+        setChats(prev => [...prev, newChat])
         setSelectedChat(newChat)
         chatId = newChat.id
+        // navigate to new chat URL
+        router.push(`/${locale}/${workspaceid}/chat/${newChat.id}`)
       } catch (e) {
         console.error(e)
         toast.error('Unable to start chat')
@@ -101,7 +110,7 @@ export const useChatHandler = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: selectedChat.id,
+          chat_id: chatId,
           content: messageContent,
           role: 'user',
           sequence_number: userSeq,
@@ -176,7 +185,7 @@ export const useChatHandler = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: selectedChat.id,
+            chat_id: chatId,
             content: assistantContent,
             role: 'assistant',
             sequence_number: assistantSeq,
@@ -203,7 +212,9 @@ export const useChatHandler = () => {
     handleNewChat,
     handleSendMessage,
     handleFocusChatInput,
-    handleStopMessage
+    handleStopMessage,
+    // Stub for edit handling
+    handleSendEdit: (_edited: string, _seq: number) => {}
   }
 }
 

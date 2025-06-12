@@ -17,9 +17,10 @@ export const ChatMessages: FC<ChatMessagesProps> = ({}) => {
     .sort((a, b) => a.message.sequence_number - b.message.sequence_number)
     .map((chatMessage, index, array) => {
       const messageFileItems = chatFileItems.filter(
-        (chatFileItem, _, self) =>
-          chatMessage.fileItems.includes(chatFileItem.id) &&
-          self.findIndex(item => item.id === chatFileItem.id) === _
+        (chatFileItem) =>
+          chatFileItem?.id != null &&
+          Array.isArray(chatMessage.fileItems) &&
+          chatMessage.fileItems.includes(chatFileItem.id)
       )
 
       return (

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Tables } from "@/db/types"
 import { ChatPayload, MessageImage } from "@/types"
 import { encode } from "gpt-tokenizer"

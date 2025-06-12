@@ -1,7 +1,6 @@
 "use client"
 
-// import Dashboard; temporarily disabled to avoid sidebar errors
-// import { Dashboard } from "@/components/ui/dashboard"
+import { Dashboard } from "@/components/ui/dashboard"
 import { ChatbotUIContext } from "@/context/context"
 // DB data is loaded via /api/workspace-data; helper to load only images
 import { getAssistantImageFromStorage } from "@/db/storage/assistant-images"
@@ -153,6 +152,6 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     return <Loading />
   }
 
-  // Temporarily render children directly until sidebar is fixed
-  return <>{children}</>
+  // Render with sidebar dashboard wrapper
+  return <Dashboard>{children}</Dashboard>
 }

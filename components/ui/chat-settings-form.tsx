@@ -5,16 +5,15 @@ import { CHAT_SETTING_LIMITS } from "@/lib/chat-setting-limits"
 import { ChatSettings } from "@/types"
 import { IconInfoCircle } from "@tabler/icons-react"
 import { FC, useContext } from "react"
-import { ModelSelect } from "../models/model-select"
 import { AdvancedSettings } from "./advanced-settings"
 import { Checkbox } from "./checkbox"
 import { Label } from "./label"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
+  Select as UiSelect,
   SelectTrigger,
-  SelectValue
+  SelectValue,
+  SelectContent,
+  SelectItem
 } from "./select"
 import { Slider } from "./slider"
 import { TextareaAutosize } from "./textarea-autosize"
@@ -41,13 +40,20 @@ export const ChatSettingsForm: FC<ChatSettingsFormProps> = ({
     <div className="space-y-3">
       <div className="space-y-1">
         <Label>Model</Label>
-
-        <ModelSelect
-          selectedModelId={chatSettings.model}
-          onSelectModel={model => {
-            onChangeChatSettings({ ...chatSettings, model })
-          }}
-        />
+        <UiSelect
+          value={chatSettings.model}
+          onValueChange={(model: string) =>
+            onChangeChatSettings({ ...chatSettings, model: model as any })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select a model" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="o3-2025-04-16">o3-2025-04-16</SelectItem>
+            <SelectItem value="gpt-4.1-2025-04-14">gpt-4.1-2025-04-14</SelectItem>
+          </SelectContent>
+        </UiSelect>
       </div>
 
       <div className="space-y-1">
@@ -224,7 +230,7 @@ const AdvancedContent: FC<AdvancedContentProps> = ({
       <div className="mt-5">
         <Label>Embeddings Provider</Label>
 
-        <Select
+        <UiSelect
           value={chatSettings.embeddingsProvider}
           onValueChange={(embeddingsProvider: "openai" | "local") => {
             onChangeChatSettings({
@@ -242,11 +248,11 @@ const AdvancedContent: FC<AdvancedContentProps> = ({
               {profile?.use_azure_openai ? "Azure OpenAI" : "OpenAI"}
             </SelectItem>
 
-            {window.location.hostname === "localhost" && (
+            {typeof window !== 'undefined' && window.location.hostname === "localhost" && (
               <SelectItem value="local">Local</SelectItem>
             )}
           </SelectContent>
-        </Select>
+        </UiSelect>
       </div>
     </div>
   )

@@ -72,15 +72,10 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
         setLoading(false)
         return
       }
-      const { chat, assistantTools, messages, messageFileItems, chatFiles } = await res.json()
-      const hydratedMessages = messages.map((msg: any) => ({
-        message: msg,
-        fileItems: messageFileItems
-          .filter((mfi: any) => mfi.message_id === msg.id)
-          .flatMap((mfi: any) => mfi.file_items)
-      }))
-      setChatMessages(hydratedMessages)
-      setChatFileItems(messageFileItems.flatMap((mfi: any) => mfi.file_items))
+      const { chat, assistantTools, messages, chatFileItems, chatFiles } = await res.json()
+      // messages is already hydrated: { message, fileItems }
+      setChatMessages(messages)
+      setChatFileItems(chatFileItems)
       setChatFiles(chatFiles)
       if (chat.assistant_id) {
         const assistant = assistants.find(a => a.id === chat.assistant_id)
@@ -107,6 +102,28 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   }, [params.chatid])
 
 
+  const [chatName, setChatName] = useState<string>(selectedChat?.name || "")
+  useEffect(() => {
+    setChatName(selectedChat?.name || "")
+  }, [selectedChat?.id])
+  const handleNameBlur = async () => {
+    if (!selectedChat) return
+    if (chatName !== selectedChat.name) {
+      try {
+        const res = await fetch('/api/chats', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: selectedChat.id, name: chatName })
+        })
+        if (res.ok) {
+          const updated = await res.json()
+          setSelectedChat(updated)
+        }
+      } catch (e) {
+        console.error('Failed to rename chat', e)
+      }
+    }
+  }
   if (loading) {
     return <Loading />
   }
@@ -127,10 +144,14 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
         <ChatSecondaryButtons />
       </div>
 
-      <div className="bg-secondary flex max-h-[50px] min-h-[50px] w-full items-center justify-center border-b-2 font-bold">
-        <div className="max-w-[200px] truncate sm:max-w-[400px] md:max-w-[500px] lg:max-w-[600px] xl:max-w-[700px]">
-          {selectedChat?.name || "Chat"}
-        </div>
+      <div className="bg-secondary flex max-h-[50px] min-h-[50px] w-full items-center justify-center border-b-2">
+        <input
+          className="bg-transparent focus:outline-none text-center font-bold truncate w-full max-w-[200px] sm:max-w-[400px] md:max-w-[500px] lg:max-w-[600px] xl:max-w-[700px]"
+          value={chatName}
+          onChange={e => setChatName(e.target.value)}
+          onBlur={handleNameBlur}
+          placeholder="Chat"
+        />
       </div>
 
       <div

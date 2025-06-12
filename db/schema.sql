@@ -3,6 +3,8 @@
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
+-- Disable foreign key checks to allow any creation order
+SET session_replication_role = 'replica';
 
 -- Profiles
 CREATE TABLE profiles (
@@ -123,20 +125,6 @@ CREATE TABLE assistant_collections (
   collection_id UUID NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, assistant_id, collection_id)
 );
-CREATE TABLE assistant_files (
-  user_id UUID NOT NULL,
-  assistant_id UUID NOT NULL REFERENCES assistants(id) ON DELETE CASCADE,
-  file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-  PRIMARY KEY (user_id, assistant_id, file_id)
-);
-CREATE TABLE assistant_tools (
-  user_id UUID NOT NULL,
-  assistant_id UUID NOT NULL REFERENCES assistants(id) ON DELETE CASCADE,
-  tool_id UUID NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
-  PRIMARY KEY (user_id, assistant_id, tool_id)
-);
-
--- Files and join
 CREATE TABLE files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
@@ -149,6 +137,30 @@ CREATE TABLE files (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ
 );
+-- Tools and join
+CREATE TABLE tools (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ
+);
+CREATE TABLE assistant_files (
+  user_id UUID NOT NULL,
+  assistant_id UUID NOT NULL,
+  file_id UUID NOT NULL,
+  PRIMARY KEY (user_id, assistant_id, file_id)
+);
+CREATE TABLE assistant_tools (
+  user_id UUID NOT NULL,
+  assistant_id UUID NOT NULL,
+  tool_id UUID NOT NULL,
+  PRIMARY KEY (user_id, assistant_id, tool_id)
+);
+
+-- Files and join
+
 CREATE TABLE file_workspaces (
   user_id UUID NOT NULL,
   file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -176,15 +188,7 @@ CREATE TABLE message_file_items (
   PRIMARY KEY (message_id, file_item_id)
 );
 
--- Tools and join
-CREATE TABLE tools (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  name TEXT,
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ
-);
+
 CREATE TABLE tool_workspaces (
   user_id UUID NOT NULL,
   tool_id UUID NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
@@ -239,6 +243,8 @@ CREATE TABLE preset_workspaces (
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, preset_id, workspace_id)
 );
+-- Re-enable foreign key checks
+SET session_replication_role = 'origin';
 
 -- Folders
 CREATE TABLE folders (
@@ -249,3 +255,10 @@ CREATE TABLE folders (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ
 );
+
+CREATE TABLE chat_files (
+      user_id UUID NOT NULL,
+      chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      PRIMARY KEY (user_id, chat_id, file_id)
+    );

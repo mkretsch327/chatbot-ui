@@ -52,7 +52,7 @@ export const PromptPicker: FC<PromptPickerProps> = ({}) => {
     const matches = prompt.content.match(regex)
 
     if (matches) {
-      const newPromptVariables = matches.map(match => ({
+      const newPromptVariables = matches.map((match: string) => ({
         promptId: prompt.id,
         name: match.replace(/\{\{|\}\}/g, ""),
         value: ""

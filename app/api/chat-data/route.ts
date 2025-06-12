@@ -31,16 +31,22 @@ export async function GET(request: Request) {
     }
     // Messages
     const messages = await getMessagesByChatId(chatId)
-    // Message-file relations
-    const messageFileItemsPromises = messages.map(msg =>
-      getFileItemsByMessageId(msg.id)
+    // Fetch file items for each message
+    const messageFileItemsByMessage = await Promise.all(
+      messages.map(msg => getFileItemsByMessageId(msg.id))
     )
-    const messageFileItems = await Promise.all(messageFileItemsPromises)
+    // Flatten file items for chat-level context
+    const chatFileItems = messageFileItemsByMessage.flat()
+    // Hydrate messages with list of file_item IDs
+    const hydratedMessages = messages.map((msg: any, idx: number) => ({
+      message: msg,
+      fileItems: messageFileItemsByMessage[idx].map((fi: any) => fi.id)
+    }))
     // Chat files
     const chatFilesRes = await getFilesByChatId(chatId)
     const chatFiles = chatFilesRes.map((f: any) => ({ id: f.id, name: f.name, type: f.type, file: null }))
 
-    return NextResponse.json({ chat, assistantTools, messages, messageFileItems, chatFiles })
+    return NextResponse.json({ chat, assistantTools, messages: hydratedMessages, chatFileItems, chatFiles })
   } catch (err: any) {
     console.error('[chat-data] error:', err)
     return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 })
