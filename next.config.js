@@ -31,10 +31,11 @@ module.exports = withBundleAnalyzer(
       serverComponentsExternalPackages: ["sharp", "onnxruntime-node"]
     },
     webpack: (config, { isServer }) => {
-      // Alias the Cloudflare sockets scheme to a no-op module everywhere
+      // Alias cloudflare:sockets to a client-side stub
+      const path = require('path')
       config.resolve.alias = {
         ...config.resolve.alias,
-        'cloudflare:sockets': false
+        'cloudflare:sockets': path.resolve(__dirname, 'components/cf-sockets-shim.js')
       }
       if (!isServer) {
         config.resolve.fallback = {
@@ -46,6 +47,7 @@ module.exports = withBundleAnalyzer(
         }
         // Replace any import from '@/db/...' with a shim module in client bundles
         config.plugins.push(
+          // Replace any import from '@/db/...' with a client-side shim
           new webpack.NormalModuleReplacementPlugin(
             /^@\/db\//,
             require.resolve('./components/db-shim.js')
