@@ -1,5 +1,4 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { toast } from "sonner"
+// Local file storage via API; Supabase removed
 
 export const uploadFile = async (
   file: File,
@@ -20,38 +19,26 @@ export const uploadFile = async (
   }
 
   const filePath = `${payload.user_id}/${Buffer.from(payload.file_id).toString("base64")}`
-
-  const { error } = await supabase.storage
-    .from("files")
-    .upload(filePath, file, {
-      upsert: true
-    })
-
-  if (error) {
+  const form = new FormData()
+  form.append("file", file)
+  form.append("path", filePath)
+  const res = await fetch("/api/files", { method: "POST", body: form })
+  if (!res.ok) {
     throw new Error("Error uploading file")
   }
-
   return filePath
 }
 
 export const deleteFileFromStorage = async (filePath: string) => {
-  const { error } = await supabase.storage.from("files").remove([filePath])
-
-  if (error) {
-    toast.error("Failed to remove file!")
-    return
+  const res = await fetch(`/api/files?path=${encodeURIComponent(filePath)}`, {
+    method: "DELETE"
+  })
+  if (!res.ok) {
+    throw new Error("Failed to remove file")
   }
 }
 
-export const getFileFromStorage = async (filePath: string) => {
-  const { data, error } = await supabase.storage
-    .from("files")
-    .createSignedUrl(filePath, 60 * 60 * 24) // 24hrs
-
-  if (error) {
-    console.error(`Error uploading file with path: ${filePath}`, error)
-    throw new Error("Error downloading file")
-  }
-
-  return data.signedUrl
+export const getFileFromStorage = (filePath: string) => {
+  // Direct URL to public/static file
+  return `/files/${filePath}`
 }

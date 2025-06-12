@@ -1,177 +1,103 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
+import { insertRow, updateRow, deleteRow } from "./index"
 
-export const getModelById = async (modelId: string) => {
-  const { data: model, error } = await supabase
-    .from("models")
-    .select("*")
-    .eq("id", modelId)
-    .single()
-
-  if (!model) {
-    throw new Error(error.message)
+export async function getModelById(modelId: string): Promise<Tables<"models">> {
+  const result = await pool.query(
+    `SELECT * FROM models WHERE id = $1 LIMIT 1`,
+    [modelId]
+  )
+  if (result.rows.length === 0) {
+    throw new Error("Model not found")
   }
-
-  return model
+  return result.rows[0]
 }
 
-export const getModelWorkspacesByWorkspaceId = async (workspaceId: string) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select(
-      `
-      id,
-      name,
-      models (*)
-    `
-    )
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
-  }
-
-  return workspace
+export async function getModelsByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"models">[]> {
+  const result = await pool.query(
+    `SELECT m.* FROM models m
+      JOIN model_workspaces mw ON mw.model_id = m.id
+      WHERE mw.workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
 }
 
-export const getModelWorkspacesByModelId = async (modelId: string) => {
-  const { data: model, error } = await supabase
-    .from("models")
-    .select(
-      `
-      id, 
-      name, 
-      workspaces (*)
-    `
-    )
-    .eq("id", modelId)
-    .single()
-
-  if (!model) {
-    throw new Error(error.message)
-  }
-
-  return model
+export async function getWorkspacesByModelId(
+  modelId: string
+): Promise<Tables<"workspaces">[]> {
+  const result = await pool.query(
+    `SELECT w.* FROM workspaces w
+      JOIN model_workspaces mw ON mw.workspace_id = w.id
+      WHERE mw.model_id = $1`,
+    [modelId]
+  )
+  return result.rows
 }
 
-export const createModel = async (
+export async function createModel(
   model: TablesInsert<"models">,
   workspace_id: string
-) => {
-  const { data: createdModel, error } = await supabase
-    .from("models")
-    .insert([model])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createModelWorkspace({
-    user_id: model.user_id,
-    model_id: createdModel.id,
-    workspace_id: workspace_id
-  })
-
-  return createdModel
-}
-
-export const createModels = async (
-  models: TablesInsert<"models">[],
-  workspace_id: string
-) => {
-  const { data: createdModels, error } = await supabase
-    .from("models")
-    .insert(models)
-    .select("*")
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createModelWorkspaces(
-    createdModels.map(model => ({
-      user_id: model.user_id,
-      model_id: model.id,
-      workspace_id
-    }))
+): Promise<Tables<"models">> {
+  const created = await insertRow<Tables<"models">>("models", model)
+  await pool.query(
+    `INSERT INTO model_workspaces (user_id, model_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [(created as any).user_id, created.id, workspace_id]
   )
-
-  return createdModels
+  return created
 }
 
-export const createModelWorkspace = async (item: {
-  user_id: string
-  model_id: string
+export async function createModels(
+  modelsArr: TablesInsert<"models">[],
   workspace_id: string
-}) => {
-  const { data: createdModelWorkspace, error } = await supabase
-    .from("model_workspaces")
-    .insert([item])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"models">[]> {
+  const created: Tables<"models">[] = []
+  for (const m of modelsArr) {
+    created.push(await createModel(m, workspace_id))
   }
-
-  return createdModelWorkspace
+  return created
 }
 
-export const createModelWorkspaces = async (
+export async function createModelWorkspace(
+  user_id: string,
+  model_id: string,
+  workspace_id: string
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO model_workspaces (user_id, model_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [user_id, model_id, workspace_id]
+  )
+}
+
+export async function createModelWorkspaces(
   items: { user_id: string; model_id: string; workspace_id: string }[]
-) => {
-  const { data: createdModelWorkspaces, error } = await supabase
-    .from("model_workspaces")
-    .insert(items)
-    .select("*")
-
-  if (error) throw new Error(error.message)
-
-  return createdModelWorkspaces
+): Promise<void> {
+  for (const it of items) {
+    await createModelWorkspace(it.user_id, it.model_id, it.workspace_id)
+  }
 }
 
-export const updateModel = async (
+export async function updateModel(
   modelId: string,
   model: TablesUpdate<"models">
-) => {
-  const { data: updatedModel, error } = await supabase
-    .from("models")
-    .update(model)
-    .eq("id", modelId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return updatedModel
+): Promise<Tables<"models">> {
+  return updateRow<Tables<"models">>("models", modelId, model)
 }
 
-export const deleteModel = async (modelId: string) => {
-  const { error } = await supabase.from("models").delete().eq("id", modelId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteModel(modelId: string): Promise<void> {
+  await deleteRow("models", modelId)
 }
 
-export const deleteModelWorkspace = async (
+export async function deleteModelWorkspace(
   modelId: string,
   workspaceId: string
-) => {
-  const { error } = await supabase
-    .from("model_workspaces")
-    .delete()
-    .eq("model_id", modelId)
-    .eq("workspace_id", workspaceId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM model_workspaces WHERE model_id = $1 AND workspace_id = $2`,
+    [modelId, workspaceId]
+  )
 }

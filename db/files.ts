@@ -1,61 +1,36 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
+import { insertRow, updateRow, deleteRow } from "./index"
 import mammoth from "mammoth"
 import { toast } from "sonner"
 import { uploadFile } from "./storage/files"
 
-export const getFileById = async (fileId: string) => {
-  const { data: file, error } = await supabase
-    .from("files")
-    .select("*")
-    .eq("id", fileId)
-    .single()
-
-  if (!file) {
-    throw new Error(error.message)
-  }
-
-  return file
+export async function getFileById(fileId: string) {
+  const result = await pool.query(`SELECT * FROM files WHERE id = $1 LIMIT 1`, [
+    fileId
+  ])
+  if (result.rows.length === 0) throw new Error("File not found")
+  return result.rows[0]
 }
 
-export const getFileWorkspacesByWorkspaceId = async (workspaceId: string) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select(
-      `
-      id,
-      name,
-      files (*)
-    `
-    )
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
-  }
-
-  return workspace
+export async function getFilesByWorkspaceId(workspaceId: string) {
+  const result = await pool.query(
+    `SELECT f.* FROM files f
+      JOIN file_workspaces fw ON fw.file_id = f.id
+      WHERE fw.workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
 }
 
-export const getFileWorkspacesByFileId = async (fileId: string) => {
-  const { data: file, error } = await supabase
-    .from("files")
-    .select(
-      `
-      id, 
-      name, 
-      workspaces (*)
-    `
-    )
-    .eq("id", fileId)
-    .single()
-
-  if (!file) {
-    throw new Error(error.message)
-  }
-
-  return file
+export async function getWorkspacesByFileId(fileId: string) {
+  const result = await pool.query(
+    `SELECT w.* FROM workspaces w
+      JOIN file_workspaces fw ON fw.workspace_id = w.id
+      WHERE fw.file_id = $1`,
+    [fileId]
+  )
+  return result.rows
 }
 
 export const createFileBasedOnExtension = async (
@@ -94,28 +69,21 @@ export const createFile = async (
   let validFilename = fileRecord.name.replace(/[^a-z0-9.]/gi, "_").toLowerCase()
   const extension = file.name.split(".").pop()
   const extensionIndex = validFilename.lastIndexOf(".")
-  const baseName = validFilename.substring(0, (extensionIndex < 0) ? undefined : extensionIndex)
+  const baseName = validFilename.substring(
+    0,
+    extensionIndex < 0 ? undefined : extensionIndex
+  )
   const maxBaseNameLength = 100 - (extension?.length || 0) - 1
   if (baseName.length > maxBaseNameLength) {
     fileRecord.name = baseName.substring(0, maxBaseNameLength) + "." + extension
   } else {
     fileRecord.name = baseName + "." + extension
   }
-  const { data: createdFile, error } = await supabase
-    .from("files")
-    .insert([fileRecord])
-    .select("*")
-    .single()
+  // Insert file record into DB
+  const createdFile = await insertRow<Tables<"files">>("files", fileRecord)
 
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createFileWorkspace({
-    user_id: createdFile.user_id,
-    file_id: createdFile.id,
-    workspace_id
-  })
+  // Associate file with workspace
+  await createFileWorkspace(createdFile.user_id, createdFile.id, workspace_id)
 
   const filePath = await uploadFile(file, {
     name: createdFile.name,
@@ -123,7 +91,8 @@ export const createFile = async (
     file_id: createdFile.name
   })
 
-  await updateFile(createdFile.id, {
+  // Update file path on the record
+  await updateRow<Tables<"files">>("files", createdFile.id, {
     file_path: filePath
   })
 
@@ -161,21 +130,11 @@ export const createDocXFile = async (
   workspace_id: string,
   embeddingsProvider: "openai" | "local"
 ) => {
-  const { data: createdFile, error } = await supabase
-    .from("files")
-    .insert([fileRecord])
-    .select("*")
-    .single()
+  // Insert file record for .docx
+  const createdFile = await insertRow<Tables<"files">>("files", fileRecord)
 
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createFileWorkspace({
-    user_id: createdFile.user_id,
-    file_id: createdFile.id,
-    workspace_id
-  })
+  // Associate file with workspace
+  await createFileWorkspace(createdFile.user_id, createdFile.id, workspace_id)
 
   const filePath = await uploadFile(file, {
     name: createdFile.name,
@@ -183,7 +142,8 @@ export const createDocXFile = async (
     file_id: createdFile.name
   })
 
-  await updateFile(createdFile.id, {
+  // Update file path
+  await updateRow<Tables<"files">>("files", createdFile.id, {
     file_path: filePath
   })
 
@@ -241,76 +201,37 @@ export const createFiles = async (
   return createdFiles
 }
 
-export const createFileWorkspace = async (item: {
-  user_id: string
-  file_id: string
+export async function createFileWorkspace(
+  user_id: string,
+  file_id: string,
   workspace_id: string
-}) => {
-  const { data: createdFileWorkspace, error } = await supabase
-    .from("file_workspaces")
-    .insert([item])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdFileWorkspace
+) {
+  await pool.query(
+    `INSERT INTO file_workspaces (user_id, file_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [user_id, file_id, workspace_id]
+  )
 }
 
-export const createFileWorkspaces = async (
+export async function createFileWorkspaces(
   items: { user_id: string; file_id: string; workspace_id: string }[]
-) => {
-  const { data: createdFileWorkspaces, error } = await supabase
-    .from("file_workspaces")
-    .insert(items)
-    .select("*")
-
-  if (error) throw new Error(error.message)
-
-  return createdFileWorkspaces
-}
-
-export const updateFile = async (
-  fileId: string,
-  file: TablesUpdate<"files">
-) => {
-  const { data: updatedFile, error } = await supabase
-    .from("files")
-    .update(file)
-    .eq("id", fileId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+) {
+  for (const it of items) {
+    await createFileWorkspace(it.user_id, it.file_id, it.workspace_id)
   }
-
-  return updatedFile
 }
 
-export const deleteFile = async (fileId: string) => {
-  const { error } = await supabase.from("files").delete().eq("id", fileId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function updateFile(fileId: string, file: TablesUpdate<"files">) {
+  return updateRow<Tables<"files">>("files", fileId, file)
 }
 
-export const deleteFileWorkspace = async (
-  fileId: string,
-  workspaceId: string
-) => {
-  const { error } = await supabase
-    .from("file_workspaces")
-    .delete()
-    .eq("file_id", fileId)
-    .eq("workspace_id", workspaceId)
+export async function deleteFile(fileId: string) {
+  await deleteRow("files", fileId)
+}
 
-  if (error) throw new Error(error.message)
-
-  return true
+export async function deleteFileWorkspace(fileId: string, workspaceId: string) {
+  await pool.query(
+    `DELETE FROM file_workspaces WHERE file_id = $1 AND workspace_id = $2`,
+    [fileId, workspaceId]
+  )
 }

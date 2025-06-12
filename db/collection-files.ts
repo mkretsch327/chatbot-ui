@@ -1,69 +1,49 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, Tables } from "@/db/types"
 
-export const getCollectionFilesByCollectionId = async (
+export async function getCollectionFilesByCollectionId(
   collectionId: string
-) => {
-  const { data: collectionFiles, error } = await supabase
-    .from("collections")
-    .select(
-      `
-        id, 
-        name, 
-        files ( id, name, type )
-      `
-    )
-    .eq("id", collectionId)
-    .single()
-
-  if (!collectionFiles) {
-    throw new Error(error.message)
-  }
-
-  return collectionFiles
+): Promise<{ files: Tables<"files">[] }> {
+  const result = await pool.query(
+    `SELECT f.* FROM files f
+      JOIN collection_files cf ON cf.file_id = f.id
+      WHERE cf.collection_id = $1`,
+    [collectionId]
+  )
+  return { files: result.rows }
 }
 
-export const createCollectionFile = async (
+export async function createCollectionFile(
   collectionFile: TablesInsert<"collection_files">
-) => {
-  const { data: createdCollectionFile, error } = await supabase
-    .from("collection_files")
-    .insert(collectionFile)
-    .select("*")
-
-  if (!createdCollectionFile) {
-    throw new Error(error.message)
-  }
-
-  return createdCollectionFile
+): Promise<Tables<"collection_files">> {
+  const columns = Object.keys(collectionFile)
+  const values = Object.values(collectionFile)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO collection_files (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const res = await pool.query(sql, values)
+  return res.rows[0]
 }
 
-export const createCollectionFiles = async (
+export async function createCollectionFiles(
   collectionFiles: TablesInsert<"collection_files">[]
-) => {
-  const { data: createdCollectionFiles, error } = await supabase
-    .from("collection_files")
-    .insert(collectionFiles)
-    .select("*")
-
-  if (!createdCollectionFiles) {
-    throw new Error(error.message)
+): Promise<Tables<"collection_files">[]> {
+  const created = [] as Tables<"collection_files">[]
+  for (const cf of collectionFiles) {
+    created.push(await createCollectionFile(cf))
   }
-
-  return createdCollectionFiles
+  return created
 }
 
-export const deleteCollectionFile = async (
+export async function deleteCollectionFile(
   collectionId: string,
   fileId: string
-) => {
-  const { error } = await supabase
-    .from("collection_files")
-    .delete()
-    .eq("collection_id", collectionId)
-    .eq("file_id", fileId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM collection_files WHERE collection_id = $1 AND file_id = $2`,
+    [collectionId, fileId]
+  )
 }

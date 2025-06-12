@@ -1,177 +1,105 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
+import { insertRow, updateRow, deleteRow } from "./index"
 
-export const getPromptById = async (promptId: string) => {
-  const { data: prompt, error } = await supabase
-    .from("prompts")
-    .select("*")
-    .eq("id", promptId)
-    .single()
-
-  if (!prompt) {
-    throw new Error(error.message)
+export async function getPromptById(
+  promptId: string
+): Promise<Tables<"prompts">> {
+  const result = await pool.query(
+    `SELECT * FROM prompts WHERE id = $1 LIMIT 1`,
+    [promptId]
+  )
+  if (result.rows.length === 0) {
+    throw new Error("Prompt not found")
   }
-
-  return prompt
+  return result.rows[0]
 }
 
-export const getPromptWorkspacesByWorkspaceId = async (workspaceId: string) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select(
-      `
-      id,
-      name,
-      prompts (*)
-    `
-    )
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
-  }
-
-  return workspace
+export async function getPromptsByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"prompts">[]> {
+  const result = await pool.query(
+    `SELECT p.* FROM prompts p
+      JOIN prompt_workspaces pw ON pw.prompt_id = p.id
+      WHERE pw.workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
 }
 
-export const getPromptWorkspacesByPromptId = async (promptId: string) => {
-  const { data: prompt, error } = await supabase
-    .from("prompts")
-    .select(
-      `
-      id, 
-      name, 
-      workspaces (*)
-    `
-    )
-    .eq("id", promptId)
-    .single()
-
-  if (!prompt) {
-    throw new Error(error.message)
-  }
-
-  return prompt
+export async function getWorkspacesByPromptId(
+  promptId: string
+): Promise<Tables<"workspaces">[]> {
+  const result = await pool.query(
+    `SELECT w.* FROM workspaces w
+      JOIN prompt_workspaces pw ON pw.workspace_id = w.id
+      WHERE pw.prompt_id = $1`,
+    [promptId]
+  )
+  return result.rows
 }
 
-export const createPrompt = async (
+export async function createPrompt(
   prompt: TablesInsert<"prompts">,
   workspace_id: string
-) => {
-  const { data: createdPrompt, error } = await supabase
-    .from("prompts")
-    .insert([prompt])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createPromptWorkspace({
-    user_id: createdPrompt.user_id,
-    prompt_id: createdPrompt.id,
-    workspace_id
-  })
-
-  return createdPrompt
-}
-
-export const createPrompts = async (
-  prompts: TablesInsert<"prompts">[],
-  workspace_id: string
-) => {
-  const { data: createdPrompts, error } = await supabase
-    .from("prompts")
-    .insert(prompts)
-    .select("*")
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createPromptWorkspaces(
-    createdPrompts.map(prompt => ({
-      user_id: prompt.user_id,
-      prompt_id: prompt.id,
-      workspace_id
-    }))
+): Promise<Tables<"prompts">> {
+  const created = await insertRow<Tables<"prompts">>("prompts", prompt)
+  await pool.query(
+    `INSERT INTO prompt_workspaces (user_id, prompt_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [(created as any).user_id, created.id, workspace_id]
   )
-
-  return createdPrompts
+  return created
 }
 
-export const createPromptWorkspace = async (item: {
-  user_id: string
-  prompt_id: string
+export async function createPrompts(
+  promptsArr: TablesInsert<"prompts">[],
   workspace_id: string
-}) => {
-  const { data: createdPromptWorkspace, error } = await supabase
-    .from("prompt_workspaces")
-    .insert([item])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"prompts">[]> {
+  const created: Tables<"prompts">[] = []
+  for (const pr of promptsArr) {
+    created.push(await createPrompt(pr, workspace_id))
   }
-
-  return createdPromptWorkspace
+  return created
 }
 
-export const createPromptWorkspaces = async (
+export async function createPromptWorkspace(
+  user_id: string,
+  prompt_id: string,
+  workspace_id: string
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO prompt_workspaces (user_id, prompt_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [user_id, prompt_id, workspace_id]
+  )
+}
+
+export async function createPromptWorkspaces(
   items: { user_id: string; prompt_id: string; workspace_id: string }[]
-) => {
-  const { data: createdPromptWorkspaces, error } = await supabase
-    .from("prompt_workspaces")
-    .insert(items)
-    .select("*")
-
-  if (error) throw new Error(error.message)
-
-  return createdPromptWorkspaces
+): Promise<void> {
+  for (const it of items) {
+    await createPromptWorkspace(it.user_id, it.prompt_id, it.workspace_id)
+  }
 }
 
-export const updatePrompt = async (
+export async function updatePrompt(
   promptId: string,
   prompt: TablesUpdate<"prompts">
-) => {
-  const { data: updatedPrompt, error } = await supabase
-    .from("prompts")
-    .update(prompt)
-    .eq("id", promptId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return updatedPrompt
+): Promise<Tables<"prompts">> {
+  return updateRow<Tables<"prompts">>("prompts", promptId, prompt)
 }
 
-export const deletePrompt = async (promptId: string) => {
-  const { error } = await supabase.from("prompts").delete().eq("id", promptId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deletePrompt(promptId: string): Promise<void> {
+  await deleteRow("prompts", promptId)
 }
 
-export const deletePromptWorkspace = async (
+export async function deletePromptWorkspace(
   promptId: string,
   workspaceId: string
-) => {
-  const { error } = await supabase
-    .from("prompt_workspaces")
-    .delete()
-    .eq("prompt_id", promptId)
-    .eq("workspace_id", workspaceId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM prompt_workspaces WHERE prompt_id = $1 AND workspace_id = $2`,
+    [promptId, workspaceId]
+  )
 }

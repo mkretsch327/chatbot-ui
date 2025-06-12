@@ -1,6 +1,6 @@
-import { Database } from "@/supabase/types"
+// Removed Supabase; using local DB helper
 import { ChatSettings } from "@/types"
-import { createClient } from "@supabase/supabase-js"
+import { getModelById } from "@/db/models"
 import { OpenAIStream, StreamingTextResponse } from "ai"
 import { ServerRuntime } from "next"
 import OpenAI from "openai"
@@ -17,19 +17,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabaseAdmin = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    // Using local DB helper to fetch custom model
 
-    const { data: customModel, error } = await supabaseAdmin
-      .from("models")
-      .select("*")
-      .eq("id", customModelId)
-      .single()
+    const customModel = await getModelById(customModelId)
 
     if (!customModel) {
-      throw new Error(error.message)
+      throw new Error("Custom model not found")
     }
 
     const custom = new OpenAI({

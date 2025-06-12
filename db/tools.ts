@@ -1,177 +1,102 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
+import { insertRow, updateRow, deleteRow } from "./index"
 
-export const getToolById = async (toolId: string) => {
-  const { data: tool, error } = await supabase
-    .from("tools")
-    .select("*")
-    .eq("id", toolId)
-    .single()
-
-  if (!tool) {
-    throw new Error(error.message)
+export async function getToolById(toolId: string): Promise<Tables<"tools">> {
+  const result = await pool.query(`SELECT * FROM tools WHERE id = $1 LIMIT 1`, [
+    toolId
+  ])
+  if (result.rows.length === 0) {
+    throw new Error("Tool not found")
   }
-
-  return tool
+  return result.rows[0]
 }
 
-export const getToolWorkspacesByWorkspaceId = async (workspaceId: string) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select(
-      `
-      id,
-      name,
-      tools (*)
-    `
-    )
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
-  }
-
-  return workspace
+export async function getToolsByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"tools">[]> {
+  const result = await pool.query(
+    `SELECT t.* FROM tools t
+      JOIN tool_workspaces tw ON tw.tool_id = t.id
+      WHERE tw.workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
 }
 
-export const getToolWorkspacesByToolId = async (toolId: string) => {
-  const { data: tool, error } = await supabase
-    .from("tools")
-    .select(
-      `
-      id, 
-      name, 
-      workspaces (*)
-    `
-    )
-    .eq("id", toolId)
-    .single()
-
-  if (!tool) {
-    throw new Error(error.message)
-  }
-
-  return tool
+export async function getWorkspacesByToolId(
+  toolId: string
+): Promise<Tables<"workspaces">[]> {
+  const result = await pool.query(
+    `SELECT w.* FROM workspaces w
+      JOIN tool_workspaces tw ON tw.workspace_id = w.id
+      WHERE tw.tool_id = $1`,
+    [toolId]
+  )
+  return result.rows
 }
 
-export const createTool = async (
+export async function createTool(
   tool: TablesInsert<"tools">,
   workspace_id: string
-) => {
-  const { data: createdTool, error } = await supabase
-    .from("tools")
-    .insert([tool])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createToolWorkspace({
-    user_id: createdTool.user_id,
-    tool_id: createdTool.id,
-    workspace_id
-  })
-
-  return createdTool
-}
-
-export const createTools = async (
-  tools: TablesInsert<"tools">[],
-  workspace_id: string
-) => {
-  const { data: createdTools, error } = await supabase
-    .from("tools")
-    .insert(tools)
-    .select("*")
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createToolWorkspaces(
-    createdTools.map(tool => ({
-      user_id: tool.user_id,
-      tool_id: tool.id,
-      workspace_id
-    }))
+): Promise<Tables<"tools">> {
+  const created = await insertRow<Tables<"tools">>("tools", tool)
+  await pool.query(
+    `INSERT INTO tool_workspaces (user_id, tool_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [(created as any).user_id, created.id, workspace_id]
   )
-
-  return createdTools
+  return created
 }
 
-export const createToolWorkspace = async (item: {
-  user_id: string
-  tool_id: string
+export async function createTools(
+  toolsArr: TablesInsert<"tools">[],
   workspace_id: string
-}) => {
-  const { data: createdToolWorkspace, error } = await supabase
-    .from("tool_workspaces")
-    .insert([item])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"tools">[]> {
+  const created: Tables<"tools">[] = []
+  for (const t of toolsArr) {
+    created.push(await createTool(t, workspace_id))
   }
-
-  return createdToolWorkspace
+  return created
 }
 
-export const createToolWorkspaces = async (
+export async function createToolWorkspace(
+  user_id: string,
+  tool_id: string,
+  workspace_id: string
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO tool_workspaces (user_id, tool_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [user_id, tool_id, workspace_id]
+  )
+}
+
+export async function createToolWorkspaces(
   items: { user_id: string; tool_id: string; workspace_id: string }[]
-) => {
-  const { data: createdToolWorkspaces, error } = await supabase
-    .from("tool_workspaces")
-    .insert(items)
-    .select("*")
-
-  if (error) throw new Error(error.message)
-
-  return createdToolWorkspaces
+): Promise<void> {
+  for (const it of items) {
+    await createToolWorkspace(it.user_id, it.tool_id, it.workspace_id)
+  }
 }
 
-export const updateTool = async (
+export async function updateTool(
   toolId: string,
   tool: TablesUpdate<"tools">
-) => {
-  const { data: updatedTool, error } = await supabase
-    .from("tools")
-    .update(tool)
-    .eq("id", toolId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return updatedTool
+): Promise<Tables<"tools">> {
+  return updateRow<Tables<"tools">>("tools", toolId, tool)
 }
 
-export const deleteTool = async (toolId: string) => {
-  const { error } = await supabase.from("tools").delete().eq("id", toolId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteTool(toolId: string): Promise<void> {
+  await deleteRow("tools", toolId)
 }
 
-export const deleteToolWorkspace = async (
+export async function deleteToolWorkspace(
   toolId: string,
   workspaceId: string
-) => {
-  const { error } = await supabase
-    .from("tool_workspaces")
-    .delete()
-    .eq("tool_id", toolId)
-    .eq("workspace_id", workspaceId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM tool_workspaces WHERE tool_id = $1 AND workspace_id = $2`,
+    [toolId, workspaceId]
+  )
 }

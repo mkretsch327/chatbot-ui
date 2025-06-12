@@ -1,0 +1,2 @@
+- Keep it as simple as possible, but no simpler
+- Design like Jeff Dean from google would.

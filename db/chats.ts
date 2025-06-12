@@ -1,81 +1,72 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
 
-export const getChatById = async (chatId: string) => {
-  const { data: chat } = await supabase
-    .from("chats")
-    .select("*")
-    .eq("id", chatId)
-    .maybeSingle()
-
-  return chat
+export async function getChatById(
+  chatId: string
+): Promise<Tables<"chats"> | null> {
+  const result = await pool.query(`SELECT * FROM chats WHERE id = $1 LIMIT 1`, [
+    chatId
+  ])
+  return result.rows[0] || null
 }
 
-export const getChatsByWorkspaceId = async (workspaceId: string) => {
-  const { data: chats, error } = await supabase
-    .from("chats")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
+export async function getChatsByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"chats">[]> {
+  const result = await pool.query(
+    `SELECT * FROM chats WHERE workspace_id = $1 ORDER BY created_at DESC`,
+    [workspaceId]
+  )
+  return result.rows
+}
 
-  if (!chats) {
-    throw new Error(error.message)
+export async function createChat(
+  chat: TablesInsert<"chats">
+): Promise<Tables<"chats">> {
+  const columns = Object.keys(chat)
+  const values = Object.values(chat)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO chats (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const result = await pool.query(sql, values)
+  return result.rows[0]
+}
+
+export async function createChats(
+  chats: TablesInsert<"chats">[]
+): Promise<Tables<"chats">[]> {
+  // Batch insert by creating each chat sequentially
+  const created: Tables<"chats">[] = []
+  for (const chat of chats) {
+    created.push(await createChat(chat))
   }
-
-  return chats
+  return created
 }
 
-export const createChat = async (chat: TablesInsert<"chats">) => {
-  const { data: createdChat, error } = await supabase
-    .from("chats")
-    .insert([chat])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdChat
-}
-
-export const createChats = async (chats: TablesInsert<"chats">[]) => {
-  const { data: createdChats, error } = await supabase
-    .from("chats")
-    .insert(chats)
-    .select("*")
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdChats
-}
-
-export const updateChat = async (
+export async function updateChat(
   chatId: string,
   chat: TablesUpdate<"chats">
-) => {
-  const { data: updatedChat, error } = await supabase
-    .from("chats")
-    .update(chat)
-    .eq("id", chatId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"chats">> {
+  const fields = { ...chat } as Record<string, any>
+  const columns = Object.keys(fields)
+  const values = Object.values(fields)
+  if (columns.length === 0) {
+    return (await getChatById(chatId))!
   }
-
-  return updatedChat
+  const setClauses = columns.map((col, i) => `${col} = $${i + 1}`)
+  const sql = `
+    UPDATE chats
+    SET ${setClauses.join(",")}
+    WHERE id = $${columns.length + 1}
+    RETURNING *
+  `
+  const result = await pool.query(sql, [...values, chatId])
+  return result.rows[0]
 }
 
-export const deleteChat = async (chatId: string) => {
-  const { error } = await supabase.from("chats").delete().eq("id", chatId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteChat(chatId: string): Promise<void> {
+  await pool.query(`DELETE FROM chats WHERE id = $1`, [chatId])
 }

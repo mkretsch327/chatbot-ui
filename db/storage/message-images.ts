@@ -1,33 +1,28 @@
-import { supabase } from "@/lib/supabase/browser-client"
+// Local image storage via API
 
-export const uploadMessageImage = async (path: string, image: File) => {
-  const bucket = "message_images"
+import {
+  uploadFile,
+  getFileFromStorage,
+  deleteFileFromStorage
+} from "@/db/storage/files"
 
-  const imageSizeLimit = 6000000 // 6MB
-
-  if (image.size > imageSizeLimit) {
-    throw new Error(`Image must be less than ${imageSizeLimit / 1000000}MB`)
+export async function uploadMessageImage(
+  _unused: string,
+  image: File
+): Promise<string> {
+  // path is provided in image.name or message; using image.name
+  const IMAGE_SIZE_LIMIT = 6000000
+  if (image.size > IMAGE_SIZE_LIMIT) {
+    throw new Error(`Image must be less than ${IMAGE_SIZE_LIMIT / 1000000}MB`)
   }
-
-  const { error } = await supabase.storage.from(bucket).upload(path, image, {
-    upsert: true
+  const filePath = image.name
+  return uploadFile(image, {
+    name: filePath,
+    user_id: "",
+    file_id: filePath
   })
-
-  if (error) {
-    throw new Error("Error uploading image")
-  }
-
-  return path
 }
 
-export const getMessageImageFromStorage = async (filePath: string) => {
-  const { data, error } = await supabase.storage
-    .from("message_images")
-    .createSignedUrl(filePath, 60 * 60 * 24) // 24hrs
-
-  if (error) {
-    throw new Error("Error downloading message image")
-  }
-
-  return data.signedUrl
+export function getMessageImageFromStorage(filePath: string): string {
+  return getFileFromStorage(filePath)
 }

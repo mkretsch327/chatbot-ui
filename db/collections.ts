@@ -1,184 +1,115 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
 
-export const getCollectionById = async (collectionId: string) => {
-  const { data: collection, error } = await supabase
-    .from("collections")
-    .select("*")
-    .eq("id", collectionId)
-    .single()
-
-  if (!collection) {
-    throw new Error(error.message)
-  }
-
-  return collection
-}
-
-export const getCollectionWorkspacesByWorkspaceId = async (
-  workspaceId: string
-) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select(
-      `
-      id,
-      name,
-      collections (*)
-    `
-    )
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
-  }
-
-  return workspace
-}
-
-export const getCollectionWorkspacesByCollectionId = async (
+export async function getCollectionById(
   collectionId: string
-) => {
-  const { data: collection, error } = await supabase
-    .from("collections")
-    .select(
-      `
-      id, 
-      name, 
-      workspaces (*)
-    `
-    )
-    .eq("id", collectionId)
-    .single()
-
-  if (!collection) {
-    throw new Error(error.message)
+): Promise<Tables<"collections">> {
+  const result = await pool.query(
+    `SELECT * FROM collections WHERE id = $1 LIMIT 1`,
+    [collectionId]
+  )
+  if (result.rows.length === 0) {
+    throw new Error("Collection not found")
   }
-
-  return collection
+  return result.rows[0]
 }
 
-export const createCollection = async (
+export async function getCollectionsByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"collections">[]> {
+  const result = await pool.query(
+    `SELECT c.* FROM collections c
+      JOIN collection_workspaces cw ON cw.collection_id = c.id
+      WHERE cw.workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
+}
+
+export async function getWorkspacesByCollectionId(
+  collectionId: string
+): Promise<Tables<"workspaces">[]> {
+  const result = await pool.query(
+    `SELECT w.* FROM workspaces w
+      JOIN collection_workspaces cw ON cw.workspace_id = w.id
+      WHERE cw.collection_id = $1`,
+    [collectionId]
+  )
+  return result.rows
+}
+
+export async function createCollection(
   collection: TablesInsert<"collections">,
   workspace_id: string
-) => {
-  const { data: createdCollection, error } = await supabase
-    .from("collections")
-    .insert([collection])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createCollectionWorkspace({
-    user_id: createdCollection.user_id,
-    collection_id: createdCollection.id,
-    workspace_id
-  })
-
+): Promise<Tables<"collections">> {
+  const createdCollection = await insertRow<Tables<"collections">>(
+    "collections",
+    collection
+  )
+  await pool.query(
+    `INSERT INTO collection_workspaces (user_id, collection_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [(createdCollection as any).user_id, createdCollection.id, workspace_id]
+  )
   return createdCollection
 }
 
-export const createCollections = async (
+export async function createCollections(
   collections: TablesInsert<"collections">[],
   workspace_id: string
-) => {
-  const { data: createdCollections, error } = await supabase
-    .from("collections")
-    .insert(collections)
-    .select("*")
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"collections">[]> {
+  const created: Tables<"collections">[] = []
+  for (const c of collections) {
+    created.push(await createCollection(c, workspace_id))
   }
-
-  await createCollectionWorkspaces(
-    createdCollections.map(collection => ({
-      user_id: collection.user_id,
-      collection_id: collection.id,
-      workspace_id
-    }))
-  )
-
-  return createdCollections
+  return created
 }
 
-export const createCollectionWorkspace = async (item: {
-  user_id: string
-  collection_id: string
+export async function createCollectionWorkspace(
+  user_id: string,
+  collection_id: string,
   workspace_id: string
-}) => {
-  const { data: createdCollectionWorkspace, error } = await supabase
-    .from("collection_workspaces")
-    .insert([item])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdCollectionWorkspace
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO collection_workspaces (user_id, collection_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [user_id, collection_id, workspace_id]
+  )
 }
 
-export const createCollectionWorkspaces = async (
+export async function createCollectionWorkspaces(
   items: { user_id: string; collection_id: string; workspace_id: string }[]
-) => {
-  const { data: createdCollectionWorkspaces, error } = await supabase
-    .from("collection_workspaces")
-    .insert(items)
-    .select("*")
-
-  if (error) throw new Error(error.message)
-
-  return createdCollectionWorkspaces
+): Promise<void> {
+  for (const it of items) {
+    await createCollectionWorkspace(
+      it.user_id,
+      it.collection_id,
+      it.workspace_id
+    )
+  }
 }
 
-export const updateCollection = async (
+export async function updateCollection(
   collectionId: string,
   collection: TablesUpdate<"collections">
-) => {
-  const { data: updatedCollection, error } = await supabase
-    .from("collections")
-    .update(collection)
-    .eq("id", collectionId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return updatedCollection
+): Promise<Tables<"collections">> {
+  return updateRow<Tables<"collections">>(
+    "collections",
+    collectionId,
+    collection
+  )
 }
 
-export const deleteCollection = async (collectionId: string) => {
-  const { error } = await supabase
-    .from("collections")
-    .delete()
-    .eq("id", collectionId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteCollection(collectionId: string): Promise<void> {
+  await deleteRow("collections", collectionId)
 }
 
-export const deleteCollectionWorkspace = async (
+export async function deleteCollectionWorkspace(
   collectionId: string,
   workspaceId: string
-) => {
-  const { error } = await supabase
-    .from("collection_workspaces")
-    .delete()
-    .eq("collection_id", collectionId)
-    .eq("workspace_id", workspaceId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM collection_workspaces WHERE collection_id = $1 AND workspace_id = $2`,
+    [collectionId, workspaceId]
+  )
 }

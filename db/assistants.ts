@@ -1,184 +1,105 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
+import { insertRow, updateRow, deleteRow } from "./index"
 
-export const getAssistantById = async (assistantId: string) => {
-  const { data: assistant, error } = await supabase
-    .from("assistants")
-    .select("*")
-    .eq("id", assistantId)
-    .single()
-
-  if (!assistant) {
-    throw new Error(error.message)
-  }
-
-  return assistant
-}
-
-export const getAssistantWorkspacesByWorkspaceId = async (
-  workspaceId: string
-) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select(
-      `
-      id,
-      name,
-      assistants (*)
-    `
-    )
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
-  }
-
-  return workspace
-}
-
-export const getAssistantWorkspacesByAssistantId = async (
+export async function getAssistantById(
   assistantId: string
-) => {
-  const { data: assistant, error } = await supabase
-    .from("assistants")
-    .select(
-      `
-      id, 
-      name, 
-      workspaces (*)
-    `
-    )
-    .eq("id", assistantId)
-    .single()
-
-  if (!assistant) {
-    throw new Error(error.message)
+): Promise<Tables<"assistants">> {
+  const result = await pool.query(
+    `SELECT * FROM assistants WHERE id = $1 LIMIT 1`,
+    [assistantId]
+  )
+  if (result.rows.length === 0) {
+    throw new Error("Assistant not found")
   }
-
-  return assistant
+  return result.rows[0]
 }
 
-export const createAssistant = async (
+export async function getAssistantsByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"assistants">[]> {
+  const result = await pool.query(
+    `SELECT a.* FROM assistants a
+      JOIN assistant_workspaces aw ON aw.assistant_id = a.id
+      WHERE aw.workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
+}
+
+export async function getWorkspacesByAssistantId(
+  assistantId: string
+): Promise<Tables<"workspaces">[]> {
+  const result = await pool.query(
+    `SELECT w.* FROM workspaces w
+      JOIN assistant_workspaces aw ON aw.workspace_id = w.id
+      WHERE aw.assistant_id = $1`,
+    [assistantId]
+  )
+  return result.rows
+}
+
+export async function createAssistant(
   assistant: TablesInsert<"assistants">,
   workspace_id: string
-) => {
-  const { data: createdAssistant, error } = await supabase
-    .from("assistants")
-    .insert([assistant])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  await createAssistantWorkspace({
-    user_id: createdAssistant.user_id,
-    assistant_id: createdAssistant.id,
-    workspace_id
-  })
-
-  return createdAssistant
+): Promise<Tables<"assistants">> {
+  const created = await insertRow<Tables<"assistants">>("assistants", assistant)
+  await pool.query(
+    `INSERT INTO assistant_workspaces (user_id, assistant_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [(created as any).user_id, created.id, workspace_id]
+  )
+  return created
 }
 
-export const createAssistants = async (
+export async function createAssistants(
   assistants: TablesInsert<"assistants">[],
   workspace_id: string
-) => {
-  const { data: createdAssistants, error } = await supabase
-    .from("assistants")
-    .insert(assistants)
-    .select("*")
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"assistants">[]> {
+  const created: Tables<"assistants">[] = []
+  for (const ast of assistants) {
+    created.push(await createAssistant(ast, workspace_id))
   }
-
-  await createAssistantWorkspaces(
-    createdAssistants.map(assistant => ({
-      user_id: assistant.user_id,
-      assistant_id: assistant.id,
-      workspace_id
-    }))
-  )
-
-  return createdAssistants
+  return created
 }
 
-export const createAssistantWorkspace = async (item: {
-  user_id: string
-  assistant_id: string
+export async function createAssistantWorkspace(
+  user_id: string,
+  assistant_id: string,
   workspace_id: string
-}) => {
-  const { data: createdAssistantWorkspace, error } = await supabase
-    .from("assistant_workspaces")
-    .insert([item])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdAssistantWorkspace
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO assistant_workspaces (user_id, assistant_id, workspace_id)
+     VALUES ($1, $2, $3)`,
+    [user_id, assistant_id, workspace_id]
+  )
 }
 
-export const createAssistantWorkspaces = async (
+export async function createAssistantWorkspaces(
   items: { user_id: string; assistant_id: string; workspace_id: string }[]
-) => {
-  const { data: createdAssistantWorkspaces, error } = await supabase
-    .from("assistant_workspaces")
-    .insert(items)
-    .select("*")
-
-  if (error) throw new Error(error.message)
-
-  return createdAssistantWorkspaces
+): Promise<void> {
+  for (const it of items) {
+    await createAssistantWorkspace(it.user_id, it.assistant_id, it.workspace_id)
+  }
 }
 
-export const updateAssistant = async (
+export async function updateAssistant(
   assistantId: string,
   assistant: TablesUpdate<"assistants">
-) => {
-  const { data: updatedAssistant, error } = await supabase
-    .from("assistants")
-    .update(assistant)
-    .eq("id", assistantId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return updatedAssistant
+): Promise<Tables<"assistants">> {
+  return updateRow<Tables<"assistants">>("assistants", assistantId, assistant)
 }
 
-export const deleteAssistant = async (assistantId: string) => {
-  const { error } = await supabase
-    .from("assistants")
-    .delete()
-    .eq("id", assistantId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteAssistant(assistantId: string): Promise<void> {
+  await deleteRow("assistants", assistantId)
 }
 
-export const deleteAssistantWorkspace = async (
+export async function deleteAssistantWorkspace(
   assistantId: string,
   workspaceId: string
-) => {
-  const { error } = await supabase
-    .from("assistant_workspaces")
-    .delete()
-    .eq("assistant_id", assistantId)
-    .eq("workspace_id", workspaceId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM assistant_workspaces WHERE assistant_id = $1 AND workspace_id = $2`,
+    [assistantId, workspaceId]
+  )
 }

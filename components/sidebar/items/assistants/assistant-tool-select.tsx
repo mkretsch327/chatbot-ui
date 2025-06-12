@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { ChatbotUIContext } from "@/context/context"
-import { Tables } from "@/supabase/types"
+import { Tables } from "@/db/types"
 import {
   IconBolt,
   IconChevronDown,

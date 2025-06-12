@@ -1,67 +1,49 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, Tables } from "@/db/types"
 
-export const getAssistantFilesByAssistantId = async (assistantId: string) => {
-  const { data: assistantFiles, error } = await supabase
-    .from("assistants")
-    .select(
-      `
-        id, 
-        name, 
-        files (*)
-      `
-    )
-    .eq("id", assistantId)
-    .single()
-
-  if (!assistantFiles) {
-    throw new Error(error.message)
-  }
-
-  return assistantFiles
+export async function getFilesByAssistantId(
+  assistantId: string
+): Promise<Tables<"files">[]> {
+  const result = await pool.query(
+    `SELECT f.* FROM files f
+      JOIN assistant_files af ON af.file_id = f.id
+      WHERE af.assistant_id = $1`,
+    [assistantId]
+  )
+  return result.rows
 }
 
-export const createAssistantFile = async (
+export async function createAssistantFile(
   assistantFile: TablesInsert<"assistant_files">
-) => {
-  const { data: createdAssistantFile, error } = await supabase
-    .from("assistant_files")
-    .insert(assistantFile)
-    .select("*")
-
-  if (!createdAssistantFile) {
-    throw new Error(error.message)
-  }
-
-  return createdAssistantFile
+): Promise<Tables<"assistant_files">> {
+  const columns = Object.keys(assistantFile)
+  const values = Object.values(assistantFile)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO assistant_files (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const res = await pool.query(sql, values)
+  return res.rows[0]
 }
 
-export const createAssistantFiles = async (
+export async function createAssistantFiles(
   assistantFiles: TablesInsert<"assistant_files">[]
-) => {
-  const { data: createdAssistantFiles, error } = await supabase
-    .from("assistant_files")
-    .insert(assistantFiles)
-    .select("*")
-
-  if (!createdAssistantFiles) {
-    throw new Error(error.message)
+): Promise<Tables<"assistant_files">[]> {
+  const created: Tables<"assistant_files">[] = []
+  for (const af of assistantFiles) {
+    created.push(await createAssistantFile(af))
   }
-
-  return createdAssistantFiles
+  return created
 }
 
-export const deleteAssistantFile = async (
+export async function deleteAssistantFile(
   assistantId: string,
   fileId: string
-) => {
-  const { error } = await supabase
-    .from("assistant_files")
-    .delete()
-    .eq("assistant_id", assistantId)
-    .eq("file_id", fileId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM assistant_files WHERE assistant_id = $1 AND file_id = $2`,
+    [assistantId, fileId]
+  )
 }

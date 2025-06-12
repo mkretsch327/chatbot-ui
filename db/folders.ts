@@ -1,57 +1,38 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
+import { insertRow, updateRow, deleteRow } from "./index"
 
-export const getFoldersByWorkspaceId = async (workspaceId: string) => {
-  const { data: folders, error } = await supabase
-    .from("folders")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-
-  if (!folders) {
-    throw new Error(error.message)
-  }
-
-  return folders
+export async function getFoldersByWorkspaceId(
+  workspaceId: string
+): Promise<Tables<"folders">[]> {
+  const result = await pool.query(
+    `SELECT * FROM folders WHERE workspace_id = $1`,
+    [workspaceId]
+  )
+  return result.rows
 }
 
-export const createFolder = async (folder: TablesInsert<"folders">) => {
-  const { data: createdFolder, error } = await supabase
-    .from("folders")
-    .insert([folder])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdFolder
+export async function createFolder(
+  folder: TablesInsert<"folders">)
+): Promise<Tables<"folders">> {
+  const created = await insertRow<Tables<"folders">>(
+    "folders",
+    folder
+  )
+  return created
 }
 
-export const updateFolder = async (
+export async function updateFolder(
   folderId: string,
   folder: TablesUpdate<"folders">
-) => {
-  const { data: updatedFolder, error } = await supabase
-    .from("folders")
-    .update(folder)
-    .eq("id", folderId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return updatedFolder
+): Promise<Tables<"folders">> {
+  return updateRow<Tables<"folders">>(
+    "folders",
+    folderId,
+    folder
+  )
 }
 
-export const deleteFolder = async (folderId: string) => {
-  const { error } = await supabase.from("folders").delete().eq("id", folderId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteFolder(folderId: string): Promise<void> {
+  await deleteRow("folders", folderId)
 }

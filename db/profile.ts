@@ -1,71 +1,49 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
 
-export const getProfileByUserId = async (userId: string) => {
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", userId)
-    .single()
-
-  if (!profile) {
-    throw new Error(error.message)
+export async function getProfile(): Promise<Tables<"profiles">> {
+  const result = await pool.query("SELECT * FROM profiles LIMIT 1")
+  if (result.rows.length === 0) {
+    throw new Error("Profile not found")
   }
-
-  return profile
+  return result.rows[0]
 }
 
-export const getProfilesByUserId = async (userId: string) => {
-  const { data: profiles, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", userId)
-
-  if (!profiles) {
-    throw new Error(error.message)
-  }
-
-  return profiles
+export async function createProfile(
+  profile: TablesInsert<"profiles">
+): Promise<Tables<"profiles">> {
+  const columns = Object.keys(profile)
+  const values = Object.values(profile)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO profiles (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const result = await pool.query(sql, values)
+  return result.rows[0]
 }
 
-export const createProfile = async (profile: TablesInsert<"profiles">) => {
-  const { data: createdProfile, error } = await supabase
-    .from("profiles")
-    .insert([profile])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdProfile
-}
-
-export const updateProfile = async (
+export async function updateProfile(
   profileId: string,
   profile: TablesUpdate<"profiles">
-) => {
-  const { data: updatedProfile, error } = await supabase
-    .from("profiles")
-    .update(profile)
-    .eq("id", profileId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"profiles">> {
+  const fields = { ...profile } as Record<string, any>
+  const columns = Object.keys(fields)
+  const values = Object.values(fields)
+  if (columns.length === 0) {
+    return getProfile()
   }
-
-  return updatedProfile
-}
-
-export const deleteProfile = async (profileId: string) => {
-  const { error } = await supabase.from("profiles").delete().eq("id", profileId)
-
-  if (error) {
-    throw new Error(error.message)
+  const setClauses = columns.map((col, i) => `${col} = $${i + 1}`)
+  const sql = `
+    UPDATE profiles
+    SET ${setClauses.join(",")}
+    WHERE id = $${columns.length + 1}
+    RETURNING *
+  `
+  const result = await pool.query(sql, [...values, profileId])
+  if (result.rows.length === 0) {
+    throw new Error("Profile update failed")
   }
-
-  return true
+  return result.rows[0]
 }

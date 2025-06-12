@@ -3,17 +3,17 @@
 "use client"
 
 import { ChatbotUIContext } from "@/context/context"
-import { getProfileByUserId } from "@/db/profile"
+import { getProfile } from "@/db/profile"
 import { getWorkspaceImageFromStorage } from "@/db/storage/workspace-images"
-import { getWorkspacesByUserId } from "@/db/workspaces"
+import { getWorkspaces } from "@/db/workspaces"
 import { convertBlobToBase64 } from "@/lib/blob-to-b64"
 import {
   fetchHostedModels,
   fetchOllamaModels,
   fetchOpenRouterModels
 } from "@/lib/models/fetch-models"
-import { supabase } from "@/lib/supabase/browser-client"
-import { Tables } from "@/supabase/types"
+// Supabase removed; using local DB
+import { Tables } from "@/db/types"
 import {
   ChatFile,
   ChatMessage,
@@ -153,48 +153,40 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
   }, [])
 
   const fetchStartingData = async () => {
-    const session = (await supabase.auth.getSession()).data.session
-
-    if (session) {
-      const user = session.user
-
-      const profile = await getProfileByUserId(user.id)
-      setProfile(profile)
-
-      if (!profile.has_onboarded) {
-        return router.push("/setup")
-      }
-
-      const workspaces = await getWorkspacesByUserId(user.id)
-      setWorkspaces(workspaces)
-
-      for (const workspace of workspaces) {
-        let workspaceImageUrl = ""
-
-        if (workspace.image_path) {
-          workspaceImageUrl =
-            (await getWorkspaceImageFromStorage(workspace.image_path)) || ""
-        }
-
-        if (workspaceImageUrl) {
-          const response = await fetch(workspaceImageUrl)
-          const blob = await response.blob()
-          const base64 = await convertBlobToBase64(blob)
-
-          setWorkspaceImages(prev => [
-            ...prev,
-            {
-              workspaceId: workspace.id,
-              path: workspace.image_path,
-              base64: base64,
-              url: workspaceImageUrl
-            }
-          ])
-        }
-      }
-
+    // Single-user: fetch profile and workspaces
+    const profile = await getProfile()
+    if (!profile) {
+      router.push("/setup")
+      return null
+    }
+    setProfile(profile)
+    if (!profile.has_onboarded) {
+      router.push("/setup")
       return profile
     }
+    const workspaces = await getWorkspaces()
+    setWorkspaces(workspaces)
+    for (const workspace of workspaces) {
+      const filePath = workspace.image_path
+      const workspaceImageUrl = filePath
+        ? getWorkspaceImageFromStorage(filePath)
+        : ""
+      const base64 = workspaceImageUrl
+        ? await convertBlobToBase64(
+            await (await fetch(workspaceImageUrl)).blob()
+          )
+        : ""
+      setWorkspaceImages(prev => [
+        ...prev,
+        {
+          workspaceId: workspace.id,
+          path: filePath,
+          base64,
+          url: workspaceImageUrl
+        }
+      ])
+    }
+    return profile
   }
 
   return (

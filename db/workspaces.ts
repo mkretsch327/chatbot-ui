@@ -1,92 +1,75 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, TablesUpdate, Tables } from "@/db/types"
 
-export const getHomeWorkspaceByUserId = async (userId: string) => {
-  const { data: homeWorkspace, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("is_home", true)
-    .single()
-
-  if (!homeWorkspace) {
-    throw new Error(error.message)
+export async function getHomeWorkspace(): Promise<Tables<"workspaces">> {
+  const result = await pool.query(
+    `SELECT * FROM workspaces WHERE is_home = true LIMIT 1`
+  )
+  if (result.rows.length === 0) {
+    throw new Error("Home workspace not found")
   }
-
-  return homeWorkspace.id
+  return result.rows[0]
 }
 
-export const getWorkspaceById = async (workspaceId: string) => {
-  const { data: workspace, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("id", workspaceId)
-    .single()
-
-  if (!workspace) {
-    throw new Error(error.message)
+export async function getWorkspaceById(
+  workspaceId: string
+): Promise<Tables<"workspaces">> {
+  const result = await pool.query(
+    `SELECT * FROM workspaces WHERE id = $1 LIMIT 1`,
+    [workspaceId]
+  )
+  if (result.rows.length === 0) {
+    throw new Error("Workspace not found")
   }
-
-  return workspace
+  return result.rows[0]
 }
 
-export const getWorkspacesByUserId = async (userId: string) => {
-  const { data: workspaces, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-
-  if (!workspaces) {
-    throw new Error(error.message)
-  }
-
-  return workspaces
+export async function getWorkspaces(): Promise<Tables<"workspaces">[]> {
+  const result = await pool.query(
+    `SELECT * FROM workspaces ORDER BY created_at DESC`
+  )
+  return result.rows
 }
 
-export const createWorkspace = async (
+export async function createWorkspace(
   workspace: TablesInsert<"workspaces">
-) => {
-  const { data: createdWorkspace, error } = await supabase
-    .from("workspaces")
-    .insert([workspace])
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return createdWorkspace
+): Promise<Tables<"workspaces">> {
+  const columns = Object.keys(workspace)
+  const values = Object.values(workspace)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO workspaces (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const result = await pool.query(sql, values)
+  return result.rows[0]
 }
 
-export const updateWorkspace = async (
+export async function updateWorkspace(
   workspaceId: string,
   workspace: TablesUpdate<"workspaces">
-) => {
-  const { data: updatedWorkspace, error } = await supabase
-    .from("workspaces")
-    .update(workspace)
-    .eq("id", workspaceId)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
+): Promise<Tables<"workspaces">> {
+  const fields = { ...workspace } as Record<string, any>
+  const columns = Object.keys(fields)
+  const values = Object.values(fields)
+  if (columns.length === 0) {
+    return getWorkspaceById(workspaceId)
   }
-
-  return updatedWorkspace
+  const setClauses = columns.map((col, i) => `${col} = $${i + 1}`)
+  const sql = `
+    UPDATE workspaces
+    SET ${setClauses.join(",")}
+    WHERE id = $${columns.length + 1}
+    RETURNING *
+  `
+  const result = await pool.query(sql, [...values, workspaceId])
+  if (result.rows.length === 0) {
+    throw new Error("Workspace update failed")
+  }
+  return result.rows[0]
 }
 
-export const deleteWorkspace = async (workspaceId: string) => {
-  const { error } = await supabase
-    .from("workspaces")
-    .delete()
-    .eq("id", workspaceId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return true
+export async function deleteWorkspace(workspaceId: string): Promise<void> {
+  await pool.query(`DELETE FROM workspaces WHERE id = $1`, [workspaceId])
 }

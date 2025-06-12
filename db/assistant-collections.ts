@@ -1,69 +1,49 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, Tables } from "@/db/types"
 
-export const getAssistantCollectionsByAssistantId = async (
+export async function getCollectionsByAssistantId(
   assistantId: string
-) => {
-  const { data: assistantCollections, error } = await supabase
-    .from("assistants")
-    .select(
-      `
-        id, 
-        name, 
-        collections (*)
-      `
-    )
-    .eq("id", assistantId)
-    .single()
-
-  if (!assistantCollections) {
-    throw new Error(error.message)
-  }
-
-  return assistantCollections
+): Promise<Tables<"collections">[]> {
+  const result = await pool.query(
+    `SELECT c.* FROM collections c
+      JOIN assistant_collections ac ON ac.collection_id = c.id
+      WHERE ac.assistant_id = $1`,
+    [assistantId]
+  )
+  return result.rows
 }
 
-export const createAssistantCollection = async (
+export async function createAssistantCollection(
   assistantCollection: TablesInsert<"assistant_collections">
-) => {
-  const { data: createdAssistantCollection, error } = await supabase
-    .from("assistant_collections")
-    .insert(assistantCollection)
-    .select("*")
-
-  if (!createdAssistantCollection) {
-    throw new Error(error.message)
-  }
-
-  return createdAssistantCollection
+): Promise<Tables<"assistant_collections">> {
+  const columns = Object.keys(assistantCollection)
+  const values = Object.values(assistantCollection)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO assistant_collections (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const res = await pool.query(sql, values)
+  return res.rows[0]
 }
 
-export const createAssistantCollections = async (
+export async function createAssistantCollections(
   assistantCollections: TablesInsert<"assistant_collections">[]
-) => {
-  const { data: createdAssistantCollections, error } = await supabase
-    .from("assistant_collections")
-    .insert(assistantCollections)
-    .select("*")
-
-  if (!createdAssistantCollections) {
-    throw new Error(error.message)
+): Promise<Tables<"assistant_collections">[]> {
+  const created: Tables<"assistant_collections">[] = []
+  for (const ac of assistantCollections) {
+    created.push(await createAssistantCollection(ac))
   }
-
-  return createdAssistantCollections
+  return created
 }
 
-export const deleteAssistantCollection = async (
+export async function deleteAssistantCollection(
   assistantId: string,
   collectionId: string
-) => {
-  const { error } = await supabase
-    .from("assistant_collections")
-    .delete()
-    .eq("assistant_id", assistantId)
-    .eq("collection_id", collectionId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM assistant_collections WHERE assistant_id = $1 AND collection_id = $2`,
+    [assistantId, collectionId]
+  )
 }

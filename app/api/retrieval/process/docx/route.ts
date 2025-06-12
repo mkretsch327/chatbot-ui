@@ -1,9 +1,9 @@
 import { generateLocalEmbedding } from "@/lib/generate-local-embedding"
 import { processDocX } from "@/lib/retrieval/processing"
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
-import { Database } from "@/supabase/types"
+// Supabase removed; using local Postgres
 import { FileItemChunk } from "@/types"
-import { createClient } from "@supabase/supabase-js"
+import { pool } from "@/db/client"
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
 
@@ -17,11 +17,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    const supabaseAdmin = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
     const profile = await getServerProfile()
 
     if (embeddingsProvider === "openai") {
@@ -98,14 +93,35 @@ export async function POST(req: Request) {
           : null
     }))
 
-    await supabaseAdmin.from("file_items").upsert(file_items)
+    // Store file items embeddings
+    await pool.query("DELETE FROM file_items WHERE file_id = $1", [fileId])
+    for (const item of file_items) {
+      const cols = ["file_id", "user_id", "content", "tokens"]
+      const vals: any[] = [
+        item.file_id,
+        item.user_id,
+        item.content,
+        item.tokens
+      ]
+      if (embeddingsProvider === "openai") {
+        cols.push("openai_embedding")
+        vals.push(item.openai_embedding)
+      } else if (embeddingsProvider === "local") {
+        cols.push("local_embedding")
+        vals.push(item.local_embedding)
+      }
+      const placeholders = vals.map((_, i) => `$${i + 1}`)
+      const sql = `INSERT INTO file_items (${cols.join(",")}) VALUES (${placeholders.join(",")})`
+      await pool.query(sql, vals)
+    }
 
     const totalTokens = file_items.reduce((acc, item) => acc + item.tokens, 0)
 
-    await supabaseAdmin
-      .from("files")
-      .update({ tokens: totalTokens })
-      .eq("id", fileId)
+    // Update total tokens on file
+    await pool.query("UPDATE files SET tokens = $1 WHERE id = $2", [
+      totalTokens,
+      fileId
+    ])
 
     return new NextResponse("Embed Successful", {
       status: 200

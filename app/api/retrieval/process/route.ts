@@ -1,3 +1,5 @@
+import fs from "fs/promises"
+import path from "path"
 import { generateLocalEmbedding } from "@/lib/generate-local-embedding"
 import {
   processCSV,
@@ -7,18 +9,15 @@ import {
   processTxt
 } from "@/lib/retrieval/processing"
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
-import { Database } from "@/supabase/types"
-import { FileItemChunk } from "@/types"
-import { createClient } from "@supabase/supabase-js"
-import { NextResponse } from "next/server"
 import OpenAI from "openai"
+import { FileItemChunk } from "@/types"
+import { getFileById } from "@/db/files"
+import { pool } from "@/db/client"
+import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
   try {
-    const supabaseAdmin = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const profile = await getServerProfile()
 
     const profile = await getServerProfile()
 
@@ -27,11 +26,7 @@ export async function POST(req: Request) {
     const file_id = formData.get("file_id") as string
     const embeddingsProvider = formData.get("embeddingsProvider") as string
 
-    const { data: fileMetadata, error: metadataError } = await supabaseAdmin
-      .from("files")
-      .select("*")
-      .eq("id", file_id)
-      .single()
+    const fileMetadata = await getFileById(file_id)
 
     if (metadataError) {
       throw new Error(
@@ -44,17 +39,17 @@ export async function POST(req: Request) {
     }
 
     if (fileMetadata.user_id !== profile.user_id) {
-      throw new Error("Unauthorized")
+      return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    const { data: file, error: fileError } = await supabaseAdmin.storage
-      .from("files")
-      .download(fileMetadata.file_path)
-
-    if (fileError)
-      throw new Error(`Failed to retrieve file: ${fileError.message}`)
-
-    const fileBuffer = Buffer.from(await file.arrayBuffer())
+    // Read file from local storage
+    const diskPath = path.join(
+      process.cwd(),
+      "public",
+      "files",
+      fileMetadata.file_path
+    )
+    const fileBuffer = await fs.readFile(diskPath)
     const blob = new Blob([fileBuffer])
     const fileExtension = fileMetadata.name.split(".").pop()?.toLowerCase()
 
@@ -152,14 +147,30 @@ export async function POST(req: Request) {
           : null
     }))
 
-    await supabaseAdmin.from("file_items").upsert(file_items)
-
-    const totalTokens = file_items.reduce((acc, item) => acc + item.tokens, 0)
-
-    await supabaseAdmin
-      .from("files")
-      .update({ tokens: totalTokens })
-      .eq("id", file_id)
+    // Store file item embeddings in local DB
+    await pool.query("DELETE FROM file_items WHERE file_id = $1", [file_id])
+    for (const item of file_items) {
+      const cols = ["file_id", "user_id", "content", "tokens"]
+      const vals = [item.file_id, item.user_id, item.content, item.tokens]
+      const placeholders = vals.map((_, i) => `$${i + 1}`)
+      // embeddings
+      if (embeddingsProvider === "openai") {
+        cols.push("openai_embedding")
+        vals.push(item.openai_embedding)
+        placeholders.push(`$${placeholders.length + 1}`)
+      } else if (embeddingsProvider === "local") {
+        cols.push("local_embedding")
+        vals.push(item.local_embedding)
+        placeholders.push(`$${placeholders.length + 1}`)
+      }
+      const sql = `INSERT INTO file_items (${cols.join(",")}) VALUES (${placeholders.join(",")})`
+      await pool.query(sql, vals)
+    }
+    const totalTokens = file_items.reduce((acc, itm) => acc + itm.tokens, 0)
+    await pool.query("UPDATE files SET tokens = $1 WHERE id = $2", [
+      totalTokens,
+      file_id
+    ])
 
     return new NextResponse("Embed Successful", {
       status: 200

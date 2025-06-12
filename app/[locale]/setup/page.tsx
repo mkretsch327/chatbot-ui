@@ -1,17 +1,18 @@
 "use client"
 
 import { ChatbotUIContext } from "@/context/context"
-import { getProfileByUserId, updateProfile } from "@/db/profile"
+import { getProfile, createProfile, updateProfile } from "@/db/profile"
 import {
-  getHomeWorkspaceByUserId,
-  getWorkspacesByUserId
+  getHomeWorkspace,
+  getWorkspaces,
+  createWorkspace
 } from "@/db/workspaces"
 import {
   fetchHostedModels,
   fetchOpenRouterModels
 } from "@/lib/models/fetch-models"
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesUpdate } from "@/supabase/types"
+// Supabase client removed; using local DB client
+import { TablesUpdate } from "@/db/types"
 import { useRouter } from "next/navigation"
 import { useContext, useEffect, useState } from "react"
 import { APIStep } from "../../../components/setup/api-step"
@@ -63,38 +64,49 @@ export default function SetupPage() {
 
   useEffect(() => {
     ;(async () => {
-      const session = (await supabase.auth.getSession()).data.session
-
-      if (!session) {
-        return router.push("/login")
-      } else {
-        const user = session.user
-
-        const profile = await getProfileByUserId(user.id)
+      try {
+        let profile = await getProfile()
+        if (!profile || !profile.has_onboarded) {
+          setProfile(profile)
+          setUsername(profile?.username || "")
+          setLoading(false)
+          return
+        }
         setProfile(profile)
         setUsername(profile.username)
 
-        if (!profile.has_onboarded) {
-          setLoading(false)
-        } else {
-          const data = await fetchHostedModels(profile)
-
-          if (!data) return
-
-          setEnvKeyMap(data.envKeyMap)
-          setAvailableHostedModels(data.hostedModels)
-
-          if (profile["openrouter_api_key"] || data.envKeyMap["openrouter"]) {
+        const hostedData = await fetchHostedModels(profile)
+        if (hostedData) {
+          setEnvKeyMap(hostedData.envKeyMap)
+          setAvailableHostedModels(hostedData.hostedModels)
+          if (profile.openrouter_api_key || hostedData.envKeyMap.openrouter) {
             const openRouterModels = await fetchOpenRouterModels()
-            if (!openRouterModels) return
-            setAvailableOpenRouterModels(openRouterModels)
+            if (openRouterModels) setAvailableOpenRouterModels(openRouterModels)
           }
-
-          const homeWorkspaceId = await getHomeWorkspaceByUserId(
-            session.user.id
-          )
-          return router.push(`/${homeWorkspaceId}/chat`)
         }
+
+        let workspaces = await getWorkspaces()
+        if (workspaces.length === 0) {
+          const defaultWorkspace = await createWorkspace({
+            name: "Home",
+            description: "Default workspace",
+            default_context_length: 4096,
+            default_model: "gpt-4-turbo",
+            default_prompt: "You are a helpful AI assistant.",
+            default_temperature: 0.5,
+            include_profile_context: true,
+            include_workspace_instructions: true,
+            embeddings_provider: "openai",
+            is_home: true
+          })
+          workspaces = [defaultWorkspace]
+        }
+        const homeWorkspace = workspaces.find(w => w.is_home) || workspaces[0]
+        setSelectedWorkspace(homeWorkspace)
+        setWorkspaces(workspaces)
+        router.push(`/${homeWorkspace.id}/chat`)
+      } catch (error) {
+        console.error(error)
       }
     })()
   }, [])
@@ -112,13 +124,8 @@ export default function SetupPage() {
   }
 
   const handleSaveSetupSetting = async () => {
-    const session = (await supabase.auth.getSession()).data.session
-    if (!session) {
-      return router.push("/login")
-    }
-
-    const user = session.user
-    const profile = await getProfileByUserId(user.id)
+    // Save profile (onboarding complete)
+    if (!profile) return
 
     const updateProfilePayload: TablesUpdate<"profiles"> = {
       ...profile,

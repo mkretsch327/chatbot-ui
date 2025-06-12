@@ -1,0 +1,4 @@
+model: o3-2025-04-16
+approvalMode: auto-edit
+notify: false
+fullAutoErrorMode: ask-user

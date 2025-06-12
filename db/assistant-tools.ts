@@ -1,67 +1,49 @@
-import { supabase } from "@/lib/supabase/browser-client"
-import { TablesInsert } from "@/supabase/types"
+import { pool } from "@/db/client"
+import { TablesInsert, Tables } from "@/db/types"
 
-export const getAssistantToolsByAssistantId = async (assistantId: string) => {
-  const { data: assistantTools, error } = await supabase
-    .from("assistants")
-    .select(
-      `
-        id, 
-        name, 
-        tools (*)
-      `
-    )
-    .eq("id", assistantId)
-    .single()
-
-  if (!assistantTools) {
-    throw new Error(error.message)
-  }
-
-  return assistantTools
+export async function getToolsByAssistantId(
+  assistantId: string
+): Promise<Tables<"tools">[]> {
+  const result = await pool.query(
+    `SELECT t.* FROM tools t
+      JOIN assistant_tools at ON at.tool_id = t.id
+      WHERE at.assistant_id = $1`,
+    [assistantId]
+  )
+  return result.rows
 }
 
-export const createAssistantTool = async (
+export async function createAssistantTool(
   assistantTool: TablesInsert<"assistant_tools">
-) => {
-  const { data: createdAssistantTool, error } = await supabase
-    .from("assistant_tools")
-    .insert(assistantTool)
-    .select("*")
-
-  if (!createdAssistantTool) {
-    throw new Error(error.message)
-  }
-
-  return createdAssistantTool
+): Promise<Tables<"assistant_tools">> {
+  const columns = Object.keys(assistantTool)
+  const values = Object.values(assistantTool)
+  const placeholders = columns.map((_, i) => `$${i + 1}`)
+  const sql = `
+    INSERT INTO assistant_tools (${columns.join(",")})
+    VALUES (${placeholders.join(",")})
+    RETURNING *
+  `
+  const res = await pool.query(sql, values)
+  return res.rows[0]
 }
 
-export const createAssistantTools = async (
+export async function createAssistantTools(
   assistantTools: TablesInsert<"assistant_tools">[]
-) => {
-  const { data: createdAssistantTools, error } = await supabase
-    .from("assistant_tools")
-    .insert(assistantTools)
-    .select("*")
-
-  if (!createdAssistantTools) {
-    throw new Error(error.message)
+): Promise<Tables<"assistant_tools">[]> {
+  const created: Tables<"assistant_tools">[] = []
+  for (const at of assistantTools) {
+    created.push(await createAssistantTool(at))
   }
-
-  return createdAssistantTools
+  return created
 }
 
-export const deleteAssistantTool = async (
+export async function deleteAssistantTool(
   assistantId: string,
   toolId: string
-) => {
-  const { error } = await supabase
-    .from("assistant_tools")
-    .delete()
-    .eq("assistant_id", assistantId)
-    .eq("tool_id", toolId)
-
-  if (error) throw new Error(error.message)
-
-  return true
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM assistant_tools WHERE assistant_id = $1 AND tool_id = $2`,
+    [assistantId, toolId]
+  )
 }
