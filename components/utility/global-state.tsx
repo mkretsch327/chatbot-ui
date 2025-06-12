@@ -3,9 +3,9 @@
 "use client"
 
 import { ChatbotUIContext } from "@/context/context"
-import { getProfile } from "@/db/profile"
+//import { getProfile } from "@/db/profile"
 import { getWorkspaceImageFromStorage } from "@/db/storage/workspace-images"
-import { getWorkspaces } from "@/db/workspaces"
+//import { getWorkspaces } from "@/db/workspaces"
 import { convertBlobToBase64 } from "@/lib/blob-to-b64"
 import {
   fetchHostedModels,
@@ -153,37 +153,33 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
   }, [])
 
   const fetchStartingData = async () => {
-    // Single-user: fetch profile and workspaces
-    const profile = await getProfile()
-    if (!profile) {
-      router.push("/setup")
+    // Fetch profile via API
+    const profileRes = await fetch('/api/profile')
+    if (!profileRes.ok) {
+      // No profile or error: redirect to setup
+      router.push('/setup')
       return null
     }
+    const profile = await profileRes.json()
     setProfile(profile)
     if (!profile.has_onboarded) {
-      router.push("/setup")
+      // Let setup page handle onboarding
       return profile
     }
-    const workspaces = await getWorkspaces()
+    // Fetch workspaces via API
+    const wsRes = await fetch('/api/workspaces')
+    const workspaces = await wsRes.json()
     setWorkspaces(workspaces)
+    // Load workspace images
     for (const workspace of workspaces) {
       const filePath = workspace.image_path
-      const workspaceImageUrl = filePath
-        ? getWorkspaceImageFromStorage(filePath)
-        : ""
-      const base64 = workspaceImageUrl
-        ? await convertBlobToBase64(
-            await (await fetch(workspaceImageUrl)).blob()
-          )
-        : ""
+      const url = filePath ? getWorkspaceImageFromStorage(filePath) : ''
+      const base64 = url
+        ? await convertBlobToBase64(await (await fetch(url)).blob())
+        : ''
       setWorkspaceImages(prev => [
         ...prev,
-        {
-          workspaceId: workspace.id,
-          path: filePath,
-          base64,
-          url: workspaceImageUrl
-        }
+        { workspaceId: workspace.id, path: filePath, base64, url }
       ])
     }
     return profile

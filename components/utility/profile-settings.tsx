@@ -10,7 +10,7 @@ import { uploadProfileImage } from "@/db/storage/profile-images"
 import { exportLocalStorageAsJSON } from "@/lib/export-old-data"
 import { fetchOpenRouterModels } from "@/lib/models/fetch-models"
 import { LLM_LIST_MAP } from "@/lib/models/llm/llm-list"
-import { supabase } from "@/lib/supabase/browser-client"
+// import { supabase } from "@/lib/supabase/browser-client" (removed Supabase auth)
 import { cn } from "@/lib/utils"
 import { OpenRouterLLM } from "@/types"
 import {
@@ -18,7 +18,6 @@ import {
   IconCircleXFilled,
   IconFileDownload,
   IconLoader2,
-  IconLogout,
   IconUser
 } from "@tabler/icons-react"
 import Image from "next/image"
@@ -118,12 +117,7 @@ export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
     profile?.openrouter_api_key || ""
   )
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
-    router.refresh()
-    return
-  }
+  // Sign-out removed (single-user mode)
 
   const handleSave = async () => {
     if (!profile) return
@@ -321,15 +315,6 @@ export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
             <SheetTitle className="flex items-center justify-between space-x-2">
               <div>User Settings</div>
 
-              <Button
-                tabIndex={-1}
-                className="text-xs"
-                size="sm"
-                onClick={handleSignOut}
-              >
-                <IconLogout className="mr-1" size={20} />
-                Logout
-              </Button>
             </SheetTitle>
           </SheetHeader>
 

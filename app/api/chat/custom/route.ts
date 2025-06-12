@@ -6,7 +6,7 @@ import { ServerRuntime } from "next"
 import OpenAI from "openai"
 import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
 
-export const runtime: ServerRuntime = "edge"
+export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   const json = await request.json()

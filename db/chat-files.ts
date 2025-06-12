@@ -14,7 +14,7 @@ export async function getFilesByChatId(
 }
 
 export async function createChatFile(
-  chatFile: TablesInsert<"chat_files">)
+  chatFile: TablesInsert<"chat_files">
 ): Promise<Tables<"chat_files">> {
   const columns = Object.keys(chatFile)
   const values = Object.values(chatFile)

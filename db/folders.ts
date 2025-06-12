@@ -13,7 +13,7 @@ export async function getFoldersByWorkspaceId(
 }
 
 export async function createFolder(
-  folder: TablesInsert<"folders">)
+  folder: TablesInsert<"folders"> 
 ): Promise<Tables<"folders">> {
   const created = await insertRow<Tables<"folders">>(
     "folders",

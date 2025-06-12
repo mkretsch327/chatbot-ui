@@ -7,6 +7,7 @@ import { pool } from "@/db/client"
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
 
+export const runtime = "nodejs"
 export async function POST(req: Request) {
   const json = await req.json()
   const { text, fileId, embeddingsProvider, fileExtension } = json as {

@@ -3,6 +3,7 @@ import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
 import OpenAI from "openai"
 import { pool } from "@/db/client"
 
+export const runtime = "nodejs"
 export async function POST(request: Request) {
   const json = await request.json()
   const { userInput, fileIds, embeddingsProvider, sourceCount } = json as {
@@ -15,8 +16,6 @@ export async function POST(request: Request) {
   const uniqueFileIds = [...new Set(fileIds)]
 
   try {
-    const profile = await getServerProfile()
-
     const profile = await getServerProfile()
 
     if (embeddingsProvider === "openai") {

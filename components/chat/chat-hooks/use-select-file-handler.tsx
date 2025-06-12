@@ -1,7 +1,7 @@
 import { ChatbotUIContext } from "@/context/context"
-import { createDocXFile, createFile } from "@/db/files"
+// createDocXFile & createFile removed: handled by server API /api/chat/files
 import { LLM_LIST } from "@/lib/models/llm/llm-list"
-import mammoth from "mammoth"
+// mammoth extraction moved to server side
 import { useContext, useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -70,128 +70,62 @@ export const useSelectFileHandler = () => {
           simplifiedFileType = "docx"
         }
 
+        // Prepare placeholder for the new message file
         setNewMessageFiles(prev => [
           ...prev,
-          {
-            id: "loading",
-            name: file.name,
-            type: simplifiedFileType,
-            file: file
-          }
+          { id: 'loading', name: file.name, type: simplifiedFileType, file }
         ])
-
-        // Handle docx files
-        if (
-          file.type.includes(
-            "vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-              "docx"
-          )
-        ) {
-          const arrayBuffer = await file.arrayBuffer()
-          const result = await mammoth.extractRawText({
-            arrayBuffer
-          })
-
-          const createdFile = await createDocXFile(
-            result.value,
-            file,
-            {
+        // Upload file via server API
+        try {
+          const form = new FormData()
+          form.append('file', file)
+          form.append(
+            'metadata',
+            JSON.stringify({
               user_id: profile.user_id,
-              description: "",
-              file_path: "",
+              description: '',
               name: file.name,
               size: file.size,
               tokens: 0,
-              type: simplifiedFileType
-            },
-            selectedWorkspace.id,
-            chatSettings.embeddingsProvider
+              type: simplifiedFileType,
+              workspace_id: selectedWorkspace.id,
+              embeddingsProvider: chatSettings.embeddingsProvider
+            })
           )
-
+          const res = await fetch('/api/chat/files', { method: 'POST', body: form })
+          if (!res.ok) throw new Error('Upload failed: ' + res.statusText)
+          const createdFile = await res.json()
           setFiles(prev => [...prev, createdFile])
-
           setNewMessageFiles(prev =>
             prev.map(item =>
-              item.id === "loading"
-                ? {
-                    id: createdFile.id,
-                    name: createdFile.name,
-                    type: createdFile.type,
-                    file: file
-                  }
+              item.id === 'loading'
+                ? { id: createdFile.id, name: createdFile.name, type: createdFile.type, file }
                 : item
             )
           )
-
-          reader.onloadend = null
-
-          return
-        } else {
-          // Use readAsArrayBuffer for PDFs and readAsText for other types
-          file.type.includes("pdf")
-            ? reader.readAsArrayBuffer(file)
-            : reader.readAsText(file)
+        } catch (error: any) {
+          toast.error('Failed to upload. ' + (error.message || ''), { duration: 10000 })
+          setNewMessageFiles(prev => prev.filter(item => item.id !== 'loading'))
         }
+        return
       } else {
         throw new Error("Unsupported file type")
       }
 
-      reader.onloadend = async function () {
-        try {
-          if (file.type.includes("image")) {
-            // Create a temp url for the image file
-            const imageUrl = URL.createObjectURL(file)
-
-            // This is a temporary image for display purposes in the chat input
-            setNewMessageImages(prev => [
-              ...prev,
-              {
-                messageId: "temp",
-                path: "",
-                base64: reader.result, // base64 image
-                url: imageUrl,
-                file
-              }
-            ])
-          } else {
-            const createdFile = await createFile(
-              file,
-              {
-                user_id: profile.user_id,
-                description: "",
-                file_path: "",
-                name: file.name,
-                size: file.size,
-                tokens: 0,
-                type: simplifiedFileType
-              },
-              selectedWorkspace.id,
-              chatSettings.embeddingsProvider
-            )
-
-            setFiles(prev => [...prev, createdFile])
-
-            setNewMessageFiles(prev =>
-              prev.map(item =>
-                item.id === "loading"
-                  ? {
-                      id: createdFile.id,
-                      name: createdFile.name,
-                      type: createdFile.type,
-                      file: file
-                    }
-                  : item
-              )
-            )
-          }
-        } catch (error: any) {
-          toast.error("Failed to upload. " + error?.message, {
-            duration: 10000
-          })
-          setNewMessageImages(prev =>
-            prev.filter(img => img.messageId !== "temp")
-          )
-          setNewMessageFiles(prev => prev.filter(file => file.id !== "loading"))
+      // Only handle image previews on reader load
+      reader.onloadend = () => {
+        if (file.type.includes("image")) {
+          const imageUrl = URL.createObjectURL(file)
+          setNewMessageImages(prev => [
+            ...prev,
+            {
+              messageId: "temp",
+              path: "",
+              base64: reader.result as string,
+              url: imageUrl,
+              file
+            }
+          ])
         }
       }
     }

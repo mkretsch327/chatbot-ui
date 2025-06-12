@@ -72,109 +72,44 @@ to apply the latest migrations to your live database.
 
 Follow these steps to get your own Chatbot UI instance running locally.
 
-You can watch the full video tutorial [here](https://www.youtube.com/watch?v=9Qq3-7-HNgw).
-
 ### 1. Clone the Repo
-
 ```bash
 git clone https://github.com/mckaywrigley/chatbot-ui.git
+cd chatbot-ui
 ```
 
 ### 2. Install Dependencies
-
-Open a terminal in the root directory of your local Chatbot UI repository and run:
-
 ```bash
 npm install
 ```
 
-### 3. Install Supabase & Run Locally
-
-#### Why Supabase?
-
-Previously, we used local browser storage to store data. However, this was not a good solution for a few reasons:
-
-- Security issues
-- Limited storage
-- Limits multi-modal use cases
-
-We now use Supabase because it's easy to use, it's open-source, it's Postgres, and it has a free tier for hosted instances.
-
-We will support other providers in the future to give you more options.
-
-#### 1. Install Docker
-
-You will need to install Docker to run Supabase locally. You can download it [here](https://docs.docker.com/get-docker) for free.
-
-#### 2. Install Supabase CLI
-
-**MacOS/Linux**
-
-```bash
-brew install supabase/tap/supabase
-```
-
-**Windows**
-
-```bash
-scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-scoop install supabase
-```
-
-#### 3. Start Supabase
-
-In your terminal at the root of your local Chatbot UI repository, run:
-
-```bash
-supabase start
-```
-
-### 4. Fill in Secrets
-
-#### 1. Environment Variables
-
-In your terminal at the root of your local Chatbot UI repository, run:
-
+### 3. Configure Environment
 ```bash
 cp .env.local.example .env.local
 ```
+Open `.env.local` and set:
+  - DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<database>
+  - LOCAL_USER_ID=<a stable UUID for your user>
+  - Optionally add any LLM API keys (OPENAI_API_KEY, etc.)
 
-Get the required values by running:
-
+### 4. Ensure Postgres is Running
+Start your Postgres server and create the database if needed:
 ```bash
-supabase status
+createdb <database>
 ```
 
-Note: Use `API URL` from `supabase status` for `NEXT_PUBLIC_SUPABASE_URL`
-
-Now go to your `.env.local` file and fill in the values.
-
-If the environment variable is set, it will disable the input in the user settings.
-
-#### 2. SQL Setup
-
-In the 1st migration file `supabase/migrations/20240108234540_setup.sql` you will need to replace 2 values with the values you got above:
-
-- `project_url` (line 53): `http://supabase_kong_chatbotui:8000` (default) can remain unchanged if you don't change your `project_id` in the `config.toml` file
-- `service_role_key` (line 54): You got this value from running `supabase status`
-
-This prevents issues with storage files not being deleted properly.
-
-### 5. Install Ollama (optional for local models)
-
-Follow the instructions [here](https://github.com/jmorganca/ollama#macos).
-
-### 6. Run app locally
-
-In your terminal at the root of your local Chatbot UI repository, run:
-
+### 5. Create & Seed the Database
 ```bash
-npm run chat
+npm run migrate
+npm run seed
 ```
 
-Your local instance of Chatbot UI should now be running at [http://localhost:3000](http://localhost:3000). Be sure to use a compatible node version (i.e. v18).
+### 6. Run the App
+```bash
+npm run dev
+```
 
-You can view your backend GUI at [http://localhost:54323/project/default/editor](http://localhost:54323/project/default/editor).
+Open your browser at `http://localhost:3000/en/setup` (replace `en` with your locale) to finish onboarding and start chatting.
 
 ## Hosted Quickstart
 

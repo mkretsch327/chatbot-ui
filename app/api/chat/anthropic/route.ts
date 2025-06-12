@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { AnthropicStream, StreamingTextResponse } from "ai"
 import { NextRequest, NextResponse } from "next/server"
 
-export const runtime = "edge"
+export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   const json = await request.json()

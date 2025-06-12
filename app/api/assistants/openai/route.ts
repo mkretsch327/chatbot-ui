@@ -1,8 +1,8 @@
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
-import { ServerRuntime } from "next"
+// API runs in Node.js runtime
 import OpenAI from "openai"
 
-export const runtime: ServerRuntime = "edge"
+export const runtime = "nodejs"
 
 export async function GET() {
   try {

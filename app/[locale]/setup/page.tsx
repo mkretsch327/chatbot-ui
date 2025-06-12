@@ -1,18 +1,13 @@
 "use client"
 
 import { ChatbotUIContext } from "@/context/context"
-import { getProfile, createProfile, updateProfile } from "@/db/profile"
-import {
-  getHomeWorkspace,
-  getWorkspaces,
-  createWorkspace
-} from "@/db/workspaces"
+// DB interactions moved to API endpoints
 import {
   fetchHostedModels,
   fetchOpenRouterModels
 } from "@/lib/models/fetch-models"
 // Supabase client removed; using local DB client
-import { TablesUpdate } from "@/db/types"
+// Removed TablesUpdate type; not needed after migrating to API
 import { useRouter } from "next/navigation"
 import { useContext, useEffect, useState } from "react"
 import { APIStep } from "../../../components/setup/api-step"
@@ -65,48 +60,64 @@ export default function SetupPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        let profile = await getProfile()
-        if (!profile || !profile.has_onboarded) {
-          setProfile(profile)
-          setUsername(profile?.username || "")
+        // Load or create profile
+        const profileRes = await fetch('/api/profile')
+        if (!profileRes.ok) {
           setLoading(false)
           return
         }
-        setProfile(profile)
-        setUsername(profile.username)
+        const profileData = await profileRes.json()
+        setProfile(profileData)
+        if (!profileData.has_onboarded) {
+          setUsername(profileData.username || '')
+          setLoading(false)
+          return
+        }
+        setUsername(profileData.username)
 
-        const hostedData = await fetchHostedModels(profile)
+        // Load model settings
+        const hostedData = await fetchHostedModels(profileData)
         if (hostedData) {
           setEnvKeyMap(hostedData.envKeyMap)
           setAvailableHostedModels(hostedData.hostedModels)
-          if (profile.openrouter_api_key || hostedData.envKeyMap.openrouter) {
+          if (profileData.openrouter_api_key || hostedData.envKeyMap.openrouter) {
             const openRouterModels = await fetchOpenRouterModels()
             if (openRouterModels) setAvailableOpenRouterModels(openRouterModels)
           }
         }
 
-        let workspaces = await getWorkspaces()
+        // Fetch or create home workspace
+        const wsRes = await fetch('/api/workspaces')
+        let workspaces = await wsRes.json()
         if (workspaces.length === 0) {
-          const defaultWorkspace = await createWorkspace({
-            name: "Home",
-            description: "Default workspace",
-            default_context_length: 4096,
-            default_model: "gpt-4-turbo",
-            default_prompt: "You are a helpful AI assistant.",
-            default_temperature: 0.5,
-            include_profile_context: true,
-            include_workspace_instructions: true,
-            embeddings_provider: "openai",
-            is_home: true
+          const newRes = await fetch('/api/workspaces', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: profileData.user_id,
+              name: 'Home',
+              description: 'Default workspace',
+              default_context_length: 4096,
+              default_model: 'gpt-4-turbo',
+              default_prompt: 'You are a helpful AI assistant.',
+              default_temperature: 0.5,
+              include_profile_context: true,
+              include_workspace_instructions: true,
+              embeddings_provider: 'openai',
+              is_home: true
+            })
           })
-          workspaces = [defaultWorkspace]
+          const defaultWs = await newRes.json()
+          workspaces = [defaultWs]
         }
-        const homeWorkspace = workspaces.find(w => w.is_home) || workspaces[0]
+        const homeWorkspace = workspaces.find((w: any) => w.is_home) || workspaces[0]
         setSelectedWorkspace(homeWorkspace)
         setWorkspaces(workspaces)
         router.push(`/${homeWorkspace.id}/chat`)
       } catch (error) {
-        console.error(error)
+        console.error('Setup error:', error)
+      } finally {
+        setLoading(false)
       }
     })()
   }, [])
@@ -124,42 +135,48 @@ export default function SetupPage() {
   }
 
   const handleSaveSetupSetting = async () => {
-    // Save profile (onboarding complete)
     if (!profile) return
+    try {
+      // Update profile via API
+      const updateRes = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: profile.id,
+          has_onboarded: true,
+          display_name: displayName,
+          username,
+          openai_api_key: openaiAPIKey,
+          openai_organization_id: openaiOrgID,
+          anthropic_api_key: anthropicAPIKey,
+          google_gemini_api_key: googleGeminiAPIKey,
+          mistral_api_key: mistralAPIKey,
+          groq_api_key: groqAPIKey,
+          perplexity_api_key: perplexityAPIKey,
+          openrouter_api_key: openrouterAPIKey,
+          use_azure_openai: useAzureOpenai,
+          azure_openai_api_key: azureOpenaiAPIKey,
+          azure_openai_endpoint: azureOpenaiEndpoint,
+          azure_openai_35_turbo_id: azureOpenai35TurboID,
+          azure_openai_45_turbo_id: azureOpenai45TurboID,
+          azure_openai_45_vision_id: azureOpenai45VisionID,
+          azure_openai_embeddings_id: azureOpenaiEmbeddingsID
+        })
+      })
+      if (!updateRes.ok) throw new Error('Failed to save profile')
+      const updatedProfile = await updateRes.json()
+      setProfile(updatedProfile)
 
-    const updateProfilePayload: TablesUpdate<"profiles"> = {
-      ...profile,
-      has_onboarded: true,
-      display_name: displayName,
-      username,
-      openai_api_key: openaiAPIKey,
-      openai_organization_id: openaiOrgID,
-      anthropic_api_key: anthropicAPIKey,
-      google_gemini_api_key: googleGeminiAPIKey,
-      mistral_api_key: mistralAPIKey,
-      groq_api_key: groqAPIKey,
-      perplexity_api_key: perplexityAPIKey,
-      openrouter_api_key: openrouterAPIKey,
-      use_azure_openai: useAzureOpenai,
-      azure_openai_api_key: azureOpenaiAPIKey,
-      azure_openai_endpoint: azureOpenaiEndpoint,
-      azure_openai_35_turbo_id: azureOpenai35TurboID,
-      azure_openai_45_turbo_id: azureOpenai45TurboID,
-      azure_openai_45_vision_id: azureOpenai45VisionID,
-      azure_openai_embeddings_id: azureOpenaiEmbeddingsID
+      // Refresh workspaces and redirect
+      const wsRes = await fetch('/api/workspaces')
+      const workspaces = await wsRes.json()
+      const homeWorkspace = workspaces.find((w: any) => w.is_home) || workspaces[0]
+      setSelectedWorkspace(homeWorkspace)
+      setWorkspaces(workspaces)
+      router.push(`/${homeWorkspace.id}/chat`)
+    } catch (error) {
+      console.error('Save setup error:', error)
     }
-
-    const updatedProfile = await updateProfile(profile.id, updateProfilePayload)
-    setProfile(updatedProfile)
-
-    const workspaces = await getWorkspacesByUserId(profile.user_id)
-    const homeWorkspace = workspaces.find(w => w.is_home)
-
-    // There will always be a home workspace
-    setSelectedWorkspace(homeWorkspace!)
-    setWorkspaces(workspaces)
-
-    return router.push(`/${homeWorkspace?.id}/chat`)
   }
 
   const renderStep = (stepNum: number) => {

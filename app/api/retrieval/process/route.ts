@@ -15,10 +15,9 @@ import { getFileById } from "@/db/files"
 import { pool } from "@/db/client"
 import { NextResponse } from "next/server"
 
+export const runtime = "nodejs"
 export async function POST(req: Request) {
   try {
-    const profile = await getServerProfile()
-
     const profile = await getServerProfile()
 
     const formData = await req.formData()

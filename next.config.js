@@ -6,6 +6,8 @@ const withPWA = require("next-pwa")({
   dest: "public"
 })
 
+// Extend webpack to ignore cloudflare:sockets in client builds
+const webpack = require('webpack')
 module.exports = withBundleAnalyzer(
   withPWA({
     reactStrictMode: true,
@@ -27,6 +29,33 @@ module.exports = withBundleAnalyzer(
     },
     experimental: {
       serverComponentsExternalPackages: ["sharp", "onnxruntime-node"]
+    },
+    webpack: (config, { isServer }) => {
+      // Alias the Cloudflare sockets scheme to a no-op module everywhere
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'cloudflare:sockets': false
+      }
+      if (!isServer) {
+        config.resolve.fallback = {
+          ...config.resolve.fallback,
+          fs: false,
+          net: false,
+          tls: false,
+          dns: false
+        }
+        // Replace any import from '@/db/...' with a shim module in client bundles
+        config.plugins.push(
+          new webpack.NormalModuleReplacementPlugin(
+            /^@\/db\//,
+            require.resolve('./components/db-shim.js')
+          ),
+          // Stub out PG modules too
+          new webpack.IgnorePlugin({ resourceRegExp: /^pg$/ }),
+          new webpack.IgnorePlugin({ resourceRegExp: /^pg-cloudflare$/ })
+        )
+      }
+      return config
     }
   })
 )

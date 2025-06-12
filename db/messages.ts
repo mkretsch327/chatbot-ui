@@ -25,7 +25,7 @@ export async function getMessagesByChatId(
 }
 
 export async function createMessage(
-  message: TablesInsert<"messages">)
+  message: TablesInsert<"messages">
 ): Promise<Tables<"messages">> {
   const columns = Object.keys(message)
   const values = Object.values(message)

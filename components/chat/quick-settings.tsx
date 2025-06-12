@@ -1,8 +1,5 @@
 import { ChatbotUIContext } from "@/context/context"
-import { getAssistantCollectionsByAssistantId } from "@/db/assistant-collections"
-import { getAssistantFilesByAssistantId } from "@/db/assistant-files"
-import { getAssistantToolsByAssistantId } from "@/db/assistant-tools"
-import { getCollectionFilesByCollectionId } from "@/db/collection-files"
+// Data now loaded via server API endpoints
 import useHotkey from "@/lib/hooks/use-hotkey"
 import { LLM_LIST } from "@/lib/models/llm/llm-list"
 import { Tables } from "@/db/types"
@@ -65,35 +62,36 @@ export const QuickSettings: FC<QuickSettingsProps> = ({}) => {
   ) => {
     console.log({ item, contentType })
     if (contentType === "assistants" && item) {
-      setSelectedAssistant(item as Tables<"assistants">)
       setLoading(true)
-      let allFiles = []
-      const assistantFiles = (await getAssistantFilesByAssistantId(item.id))
-        .files
-      allFiles = [...assistantFiles]
-      const assistantCollections = (
-        await getAssistantCollectionsByAssistantId(item.id)
-      ).collections
-      for (const collection of assistantCollections) {
-        const collectionFiles = (
-          await getCollectionFilesByCollectionId(collection.id)
-        ).files
-        allFiles = [...allFiles, ...collectionFiles]
-      }
-      const assistantTools = (await getAssistantToolsByAssistantId(item.id))
-        .tools
-      setSelectedTools(assistantTools)
-      setChatFiles(
-        allFiles.map(file => ({
-          id: file.id,
-          name: file.name,
-          type: file.type,
-          file: null
-        }))
-      )
-      if (allFiles.length > 0) setShowFilesDisplay(true)
-      setLoading(false)
+      setSelectedAssistant(item as Tables<"assistants">)
       setSelectedPreset(null)
+      try {
+        // Fetch assistant-related data from server
+        const res = await fetch(
+          `/api/assistant-data?assistantId=${item.id}`
+        )
+        if (!res.ok) throw new Error('Failed to load assistant data')
+        const { files, collections, tools } = await res.json()
+        // Combine files and collection-files
+        let allFiles = files
+        for (const coll of collections) {
+          const collRes = await fetch(
+            `/api/collection-files?collectionId=${coll.id}`
+          )
+          if (!collRes.ok) continue
+          const { files: cf } = await collRes.json()
+          allFiles = allFiles.concat(cf)
+        }
+        setChatFiles(
+          allFiles.map((file: any) => ({ id: file.id, name: file.name, type: file.type, file: null }))
+        )
+        if (allFiles.length > 0) setShowFilesDisplay(true)
+        setSelectedTools(tools)
+      } catch (e: any) {
+        console.error('QuickSettings assistant load error:', e)
+      } finally {
+        setLoading(false)
+      }
     } else if (contentType === "presets" && item) {
       setSelectedPreset(item as Tables<"presets">)
       setSelectedAssistant(null)
