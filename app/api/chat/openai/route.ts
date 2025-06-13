@@ -19,17 +19,22 @@ export async function POST(request: Request) {
 
     checkApiKey(profile.openai_api_key, "OpenAI")
 
-    const openai = new OpenAI({
+    const client = new OpenAI({
       apiKey: profile.openai_api_key || "",
       organization: profile.openai_organization_id
     })
 
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
       messages: messages as ChatCompletionCreateParamsBase["messages"],
       stream: true
     })
 
+    // const response = await client.responses.create({
+    //   model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
+    //   input: messages as ChatCompletionCreateParamsBase["messages"],
+    //   stream: true
+    // })
     const stream = OpenAIStream(response)
 
     return new StreamingTextResponse(stream)
