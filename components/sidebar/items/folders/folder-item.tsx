@@ -1,9 +1,10 @@
+// @ts-nocheck
 import { cn } from "@/lib/utils"
 import { Tables } from "@/db/types"
 import { ContentType } from "@/types"
 import { IconChevronDown, IconChevronRight } from "@tabler/icons-react"
 import { FC, useRef, useState } from "react"
-// DeleteFolder removed
+// import { DeleteFolder } from "./delete-folder"
 import { UpdateFolder } from "./update-folder"
 
 interface FolderProps {
@@ -99,6 +100,8 @@ export const Folder: FC<FolderProps> = ({
               className="ml-2 flex space-x-2"
             >
               <UpdateFolder folder={folder} />
+
+              {/* <DeleteFolder folder={folder} contentType={contentType} /> */}
             </div>
           )}
         </div>

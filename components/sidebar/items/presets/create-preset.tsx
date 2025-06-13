@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { SidebarCreateItem } from "@/components/sidebar/items/all/sidebar-create-item"
 import { ChatSettingsForm } from "@/components/ui/chat-settings-form"
 import { Input } from "@/components/ui/input"

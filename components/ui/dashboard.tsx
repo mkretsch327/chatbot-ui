@@ -76,6 +76,7 @@ export const Dashboard: FC<DashboardProps> = ({ children }) => {
           "duration-200 dark:border-none " + (showSidebar ? "border-r-2" : "")
         )}
         style={{
+          // Sidebar
           minWidth: showSidebar ? `${SIDEBAR_WIDTH}px` : "0px",
           maxWidth: showSidebar ? `${SIDEBAR_WIDTH}px` : "0px",
           width: showSidebar ? `${SIDEBAR_WIDTH}px` : "0px"
@@ -83,7 +84,7 @@ export const Dashboard: FC<DashboardProps> = ({ children }) => {
       >
         {showSidebar && (
           <Tabs
-            className="flex h-full flex-col"
+            className="flex h-full"
             value={contentType}
             onValueChange={tabValue => {
               setContentType(tabValue as ContentType)
@@ -91,6 +92,7 @@ export const Dashboard: FC<DashboardProps> = ({ children }) => {
             }}
           >
             <SidebarSwitcher onContentTypeChange={setContentType} />
+
             <Sidebar contentType={contentType} showSidebar={showSidebar} />
           </Tabs>
         )}

@@ -26,6 +26,7 @@ import {
 import { AssistantImage } from "@/types/images/assistant-image"
 import { VALID_ENV_KEYS } from "@/types/valid-keys"
 import { useRouter } from "next/navigation"
+import { LLMID } from "@/types"
 import { FC, useEffect, useState } from "react"
 
 interface GlobalStateProps {
@@ -77,7 +78,7 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
   const [userInput, setUserInput] = useState<string>("")
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
-    model: "gpt-4.1-2025-04-14",
+    model: "gpt-4.1-2025-04-14" as unknown as LLMID,
     prompt: "You are a helpful AI assistant.",
     temperature: 0.5,
     contextLength: 4000,

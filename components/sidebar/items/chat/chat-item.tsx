@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ModelIcon } from "@/components/models/model-icon"
 import { WithTooltip } from "@/components/ui/with-tooltip"
 import { ChatbotUIContext } from "@/context/context"

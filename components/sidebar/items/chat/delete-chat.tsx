@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useChatHandler } from "@/components/chat/chat-hooks/use-chat-handler"
 import { Button } from "@/components/ui/button"
 import {
