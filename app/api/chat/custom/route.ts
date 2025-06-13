@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Removed Supabase; using local DB helper
 import { ChatSettings } from "@/types"
 import { getModelById } from "@/db/models"

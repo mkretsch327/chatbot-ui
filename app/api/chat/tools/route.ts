@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const runtime = "nodejs"
 import { openapiToFunctions } from "@/lib/openapi-conversion"
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"

@@ -40,7 +40,8 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
     setChatFiles,
     setShowFilesDisplay,
     setUseRetrieval,
-    setSelectedTools
+    setSelectedTools,
+    setChats
   } = useContext(ChatbotUIContext)
 
   const { handleNewChat, handleFocusChatInput } = useChatHandler()
@@ -85,6 +86,8 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
         }
       }
       setSelectedChat(chat)
+      // Ensure this chat appears in the sidebar list
+      setChats(prev => (prev.some(c => c.id === chat.id) ? prev : [...prev, chat]))
       setChatSettings({
         model: chat.model as LLMID,
         prompt: chat.prompt,
