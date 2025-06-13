@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getProfile, createProfile, updateProfile } from '@/db/profile'
+import { createProfile, updateProfile } from '@/db/profile'
+import { getServerProfile } from '@/lib/server/server-chat-helpers'
 
 export async function GET() {
   try {
-    const profile = await getProfile()
+    const profile = await getServerProfile()
     return NextResponse.json(profile)
   } catch (e) {
     return NextResponse.json(null, { status: 404 })

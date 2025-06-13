@@ -28,13 +28,15 @@ export const ChatItem: FC<ChatItemProps> = ({ chat }) => {
 
   const router = useRouter()
   const params = useParams()
+  const locale = params.locale
+  const workspaceid = params.workspaceid
   const isActive = params.chatid === chat.id || selectedChat?.id === chat.id
 
   const itemRef = useRef<HTMLDivElement>(null)
 
   const handleClick = () => {
-    if (!selectedWorkspace) return
-    return router.push(`/${selectedWorkspace.id}/chat/${chat.id}`)
+    if (!selectedWorkspace || !locale || !workspaceid) return
+    return router.push(`/${locale}/${workspaceid}/chat/${chat.id}`)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {

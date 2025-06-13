@@ -12,7 +12,7 @@ import useHotkey from "@/lib/hooks/use-hotkey"
 import { IconBuilding, IconHome, IconPlus } from "@tabler/icons-react"
 import { ChevronsUpDown } from "lucide-react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { FC, useContext, useEffect, useState } from "react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
@@ -33,6 +33,8 @@ export const WorkspaceSwitcher: FC<WorkspaceSwitcherProps> = ({}) => {
   const { handleNewChat } = useChatHandler()
 
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale
 
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState("")
@@ -67,7 +69,8 @@ export const WorkspaceSwitcher: FC<WorkspaceSwitcherProps> = ({}) => {
     setSelectedWorkspace(createdWorkspace)
     setOpen(false)
 
-    return router.push(`/${createdWorkspace.id}/chat`)
+    if (!locale) return
+    return router.push(`/${locale}/${createdWorkspace.id}/chat`)
   }
 
   const getWorkspaceName = (workspaceId: string) => {
@@ -86,7 +89,8 @@ export const WorkspaceSwitcher: FC<WorkspaceSwitcherProps> = ({}) => {
     setSelectedWorkspace(workspace)
     setOpen(false)
 
-    return router.push(`/${workspace.id}/chat`)
+    if (!locale) return
+    return router.push(`/${locale}/${workspace.id}/chat`)
   }
 
   const workspaceImage = workspaceImages.find(

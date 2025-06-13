@@ -14,22 +14,22 @@ import { ChatbotUIContext } from "@/context/context"
 import {
   createAssistantCollection,
   deleteAssistantCollection,
-  getAssistantCollectionsByAssistantId
+  getCollectionsByAssistantId
 } from "@/db/assistant-collections"
 import {
   createAssistantFile,
   deleteAssistantFile,
-  getAssistantFilesByAssistantId
+  getFilesByAssistantId
 } from "@/db/assistant-files"
 import {
   createAssistantTool,
   deleteAssistantTool,
-  getAssistantToolsByAssistantId
+  getToolsByAssistantId
 } from "@/db/assistant-tools"
 import {
   createAssistantWorkspaces,
   deleteAssistantWorkspace,
-  getAssistantWorkspacesByAssistantId,
+  getWorkspacesByAssistantId,
   updateAssistant
 } from "@/db/assistants"
 import { updateChat } from "@/db/chats"
@@ -41,31 +41,31 @@ import {
 import {
   createCollectionWorkspaces,
   deleteCollectionWorkspace,
-  getCollectionWorkspacesByCollectionId,
+  getWorkspacesByCollectionId,
   updateCollection
 } from "@/db/collections"
 import {
   createFileWorkspaces,
   deleteFileWorkspace,
-  getFileWorkspacesByFileId,
+  getWorkspacesByFileId,
   updateFile
 } from "@/db/files"
 import {
   createModelWorkspaces,
   deleteModelWorkspace,
-  getModelWorkspacesByModelId,
+  getWorkspacesByModelId,
   updateModel
 } from "@/db/models"
 import {
   createPresetWorkspaces,
   deletePresetWorkspace,
-  getPresetWorkspacesByPresetId,
+  getWorkspacesByPresetId,
   updatePreset
 } from "@/db/presets"
 import {
   createPromptWorkspaces,
   deletePromptWorkspace,
-  getPromptWorkspacesByPromptId,
+  getWorkspacesByPromptId,
   updatePrompt
 } from "@/db/prompts"
 import {
@@ -75,7 +75,7 @@ import {
 import {
   createToolWorkspaces,
   deleteToolWorkspace,
-  getToolWorkspacesByToolId,
+  getWorkspacesByToolId,
   updateTool
 } from "@/db/tools"
 import { convertBlobToBase64 } from "@/lib/blob-to-b64"
@@ -206,21 +206,19 @@ export const SidebarUpdateItem: FC<SidebarUpdateItemProps> = ({
     prompts: null,
     files: null,
     collections: async (collectionId: string) => {
-      const collectionFiles =
-        await getCollectionFilesByCollectionId(collectionId)
+      const collectionFiles = await getCollectionFilesByCollectionId(collectionId)
       setStartingCollectionFiles(collectionFiles.files)
       setSelectedCollectionFiles([])
     },
     assistants: async (assistantId: string) => {
-      const assistantFiles = await getAssistantFilesByAssistantId(assistantId)
-      setStartingAssistantFiles(assistantFiles.files)
+      const assistantFiles = await getFilesByAssistantId(assistantId)
+      setStartingAssistantFiles(assistantFiles)
 
-      const assistantCollections =
-        await getAssistantCollectionsByAssistantId(assistantId)
-      setStartingAssistantCollections(assistantCollections.collections)
+      const assistantCollections = await getCollectionsByAssistantId(assistantId)
+      setStartingAssistantCollections(assistantCollections)
 
-      const assistantTools = await getAssistantToolsByAssistantId(assistantId)
-      setStartingAssistantTools(assistantTools.tools)
+      const assistantTools = await getToolsByAssistantId(assistantId)
+      setStartingAssistantTools(assistantTools)
 
       setSelectedAssistantFiles([])
       setSelectedAssistantCollections([])
@@ -233,32 +231,32 @@ export const SidebarUpdateItem: FC<SidebarUpdateItemProps> = ({
   const fetchWorkpaceFunctions = {
     chats: null,
     presets: async (presetId: string) => {
-      const item = await getPresetWorkspacesByPresetId(presetId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByPresetId(presetId)
+      return workspaces
     },
     prompts: async (promptId: string) => {
-      const item = await getPromptWorkspacesByPromptId(promptId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByPromptId(promptId)
+      return workspaces
     },
     files: async (fileId: string) => {
-      const item = await getFileWorkspacesByFileId(fileId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByFileId(fileId)
+      return workspaces
     },
     collections: async (collectionId: string) => {
-      const item = await getCollectionWorkspacesByCollectionId(collectionId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByCollectionId(collectionId)
+      return workspaces
     },
     assistants: async (assistantId: string) => {
-      const item = await getAssistantWorkspacesByAssistantId(assistantId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByAssistantId(assistantId)
+      return workspaces
     },
     tools: async (toolId: string) => {
-      const item = await getToolWorkspacesByToolId(toolId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByToolId(toolId)
+      return workspaces
     },
     models: async (modelId: string) => {
-      const item = await getModelWorkspacesByModelId(modelId)
-      return item.workspaces
+      const workspaces = await getWorkspacesByModelId(modelId)
+      return workspaces
     }
   }
 

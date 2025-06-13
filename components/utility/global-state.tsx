@@ -26,6 +26,7 @@ import {
 import { AssistantImage } from "@/types/images/assistant-image"
 import { VALID_ENV_KEYS } from "@/types/valid-keys"
 import { useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { LLMID } from "@/types"
 import { FC, useEffect, useState } from "react"
 
@@ -123,6 +124,33 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
   // TOOL STORE
   const [selectedTools, setSelectedTools] = useState<Tables<"tools">[]>([])
   const [toolInUse, setToolInUse] = useState<string>("none")
+  
+  // Get URL params for locale and workspace
+  const params = useParams()
+  
+  // Set selectedWorkspace based on URL param on initial load
+  useEffect(() => {
+    if (!selectedWorkspace && workspaces.length > 0 && params.workspaceid) {
+      const ws = workspaces.find(w => w.id === params.workspaceid)
+      if (ws) {
+        setSelectedWorkspace(ws)
+      }
+    }
+  }, [workspaces, selectedWorkspace, params.workspaceid])
+  
+  // Fetch chats for selectedWorkspace
+  useEffect(() => {
+    if (!selectedWorkspace) return
+    ;(async () => {
+      const res = await fetch(`/api/chats?workspaceId=${selectedWorkspace.id}`)
+      if (!res.ok) {
+        console.error("Failed to fetch chats for workspace", selectedWorkspace.id)
+        return
+      }
+      const chatsData = await res.json()
+      setChats(chatsData)
+    })()
+  }, [selectedWorkspace])
 
   useEffect(() => {
     ;(async () => {
@@ -153,7 +181,7 @@ export const GlobalState: FC<GlobalStateProps> = ({ children }) => {
     })()
   }, [])
 
-  const fetchStartingData = async () => {
+  async function fetchStartingData() {
     // Fetch profile via API
     const profileRes = await fetch('/api/profile')
     if (!profileRes.ok) {

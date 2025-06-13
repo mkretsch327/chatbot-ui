@@ -214,8 +214,10 @@ export const SidebarDataList: FC<SidebarDataListProps> = ({
     }
   }, [data])
 
-  const dataWithFolders = data.filter(item => item.folder_id)
-  const dataWithoutFolders = data.filter(item => item.folder_id === null)
+  // Include items where folder_id is not null or undefined
+  const dataWithFolders = data.filter(item => item.folder_id != null)
+  // Include items where folder_id is null or undefined
+  const dataWithoutFolders = data.filter(item => item.folder_id == null)
 
   return (
     <>
