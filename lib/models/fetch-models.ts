@@ -23,23 +23,32 @@ export const fetchHostedModels = async (profile: Tables<"profiles">) => {
 
     let modelsToAdd: LLM[] = []
 
+    // For each provider, if a key is set, add its models
     for (const provider of providers) {
+      // Determine the corresponding profile key
       let providerKey: keyof typeof profile
+      if (provider === "google") providerKey = "google_gemini_api_key"
+      else if (provider === "azure") providerKey = "azure_openai_api_key"
+      else providerKey = `${provider}_api_key` as keyof typeof profile
 
-      if (provider === "google") {
-        providerKey = "google_gemini_api_key"
-      } else if (provider === "azure") {
-        providerKey = "azure_openai_api_key"
-      } else {
-        providerKey = `${provider}_api_key` as keyof typeof profile
-      }
+      // Skip if no key for this provider
+      if (!profile?.[providerKey] && !data.isUsingEnvKeyMap[provider]) continue
 
-      if (profile?.[providerKey] || data.isUsingEnvKeyMap[provider]) {
-        const models = LLM_LIST_MAP[provider]
-
-        if (Array.isArray(models)) {
-          modelsToAdd.push(...models)
+      // Dynamic OpenAI/Azure list via server-side endpoint
+      if (provider === 'openai' || provider === 'azure') {
+        try {
+          const resp = await fetch('/api/openai-models')
+          if (resp.ok) {
+            const dyn: LLM[] = await resp.json()
+            modelsToAdd.push(...dyn)
+          }
+        } catch (e) {
+          console.warn('Failed to fetch OpenAI models dynamically', e)
         }
+      } else {
+        // Static list for other providers
+        const staticList = LLM_LIST_MAP[provider]
+        if (Array.isArray(staticList)) modelsToAdd.push(...staticList)
       }
     }
 
