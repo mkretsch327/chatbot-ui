@@ -166,17 +166,41 @@ export const useChatHandler = () => {
       const decoder = new TextDecoder()
       let done = false
       let assistantContent = ''
+      let buffer = ''
+      // Read SSE chunks from Responses API
       while (!done) {
         const { value, done: doneReading } = await reader.read()
         done = doneReading
         if (value) {
-          const chunk = decoder.decode(value)
-          assistantContent += chunk
-          setChatMessages(prev => prev.map(msg =>
-            msg.message.id === assistantMsgId
-              ? { ...msg, message: { ...msg.message, content: assistantContent } }
-              : msg
-          ))
+          // Decode chunk and accumulate
+          buffer += decoder.decode(value, { stream: true })
+          // Split complete SSE events
+          const parts = buffer.split('\n\n')
+          // Keep last partial event in buffer
+          buffer = parts.pop() || ''
+          for (const part of parts) {
+            const line = part.trim()
+            if (!line.startsWith('data:')) continue
+            const data = line.slice(5).trim()
+            if (data === '[DONE]') {
+              done = true
+              break
+            }
+            // Parse JSON to extract token or output_text
+            let parsed
+            try {
+              parsed = JSON.parse(data)
+            } catch {
+              continue
+            }
+            const token = parsed.output_text ?? parsed.token ?? ''
+            assistantContent += token
+            setChatMessages(prev => prev.map(msg =>
+              msg.message.id === assistantMsgId
+                ? { ...msg, message: { ...msg.message, content: assistantContent } }
+                : msg
+            ))
+          }
         }
       }
       // Persist assistant message

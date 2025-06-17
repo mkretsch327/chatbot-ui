@@ -1,10 +1,7 @@
 // @ts-nocheck
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
 import { ChatSettings } from "@/types"
-import { OpenAIStream, StreamingTextResponse } from "ai"
-import { ServerRuntime } from "next"
 import OpenAI from "openai"
-import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
 
 export const runtime = "nodejs"
 
@@ -25,20 +22,19 @@ export async function POST(request: Request) {
       organization: profile.openai_organization_id
     })
 
-    const response = await client.chat.completions.create({
-      model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
-      messages: messages as ChatCompletionCreateParamsBase["messages"],
+    // Use the new Responses API for streaming
+    const response = await client.responses.create({
+      model: chatSettings.model as string,
+      input: messages as any[],
       stream: true
     })
-
-    // const response = await client.responses.create({
-    //   model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
-    //   input: messages as ChatCompletionCreateParamsBase["messages"],
-    //   stream: true
-    // })
-    const stream = OpenAIStream(response)
-
-    return new StreamingTextResponse(stream)
+    // Forward the SSE stream directly to the client
+    return new Response(response.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform'
+      }
+    })
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500
