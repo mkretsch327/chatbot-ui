@@ -19,8 +19,12 @@ export async function GET() {
       apiKey: profile.openai_api_key || '',
       organization: profile.openai_organization_id
     })
-    const listRes = await client.models.list()
-    const models: LLM[] = listRes.data.map(m => ({
+    // Collect all models (the SDK paginator is async-iterable)
+    const allModels: any[] = []
+    for await (const m of client.models.list()) {
+      allModels.push(m)
+    }
+    const models: LLM[] = allModels.map(m => ({
       modelId: m.id as LLMID,
       modelName: m.id,
       provider: 'openai',

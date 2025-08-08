@@ -17,22 +17,31 @@ export async function POST(request: Request) {
 
     checkApiKey(profile.openai_api_key, "OpenAI")
 
-    const client = new OpenAI({
-      apiKey: profile.openai_api_key || "",
-      organization: profile.openai_organization_id
+    // Stream via direct fetch to avoid SDK streaming differences
+    const upstream = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${profile.openai_api_key}`,
+        ...(profile.openai_organization_id ? { 'OpenAI-Organization': profile.openai_organization_id } : {}),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: chatSettings.model,
+        input: messages,
+        stream: true
+      })
     })
 
-    // Use the new Responses API for streaming
-    const response = await client.responses.create({
-      model: chatSettings.model as string,
-      input: messages as any[],
-      stream: true
-    })
-    // Forward the SSE stream directly to the client
-    return new Response(response.body, {
+    if (!upstream.ok || !upstream.body) {
+      const text = await upstream.text().catch(() => '')
+      return new Response(JSON.stringify({ message: text || 'Upstream error from OpenAI' }), { status: upstream.status || 500 })
+    }
+
+    return new Response(upstream.body, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform'
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive'
       }
     })
   } catch (error: any) {

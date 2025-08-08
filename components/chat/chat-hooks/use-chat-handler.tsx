@@ -167,7 +167,7 @@ export const useChatHandler = () => {
       let done = false
       let assistantContent = ''
       let buffer = ''
-      // Read SSE chunks from Responses API
+      // Read SSE chunks from OpenAI Responses API (SSE)
       while (!done) {
         const { value, done: doneReading } = await reader.read()
         done = doneReading
@@ -179,27 +179,50 @@ export const useChatHandler = () => {
           // Keep last partial event in buffer
           buffer = parts.pop() || ''
           for (const part of parts) {
-            const line = part.trim()
-            if (!line.startsWith('data:')) continue
-            const data = line.slice(5).trim()
-            if (data === '[DONE]') {
+            // Each 'part' may include multiple lines like:
+            // event: response.output_text.delta\n
+            // data: { ... }\n
+            // Find the 'data:' line regardless of order
+            const lines = part.split('\n')
+            let dataLine = ''
+            for (const l of lines) {
+              const t = l.trim()
+              if (t.startsWith('data:')) {
+                dataLine = t.slice(5).trim()
+                break
+              }
+            }
+            if (!dataLine) continue
+            if (dataLine === '[DONE]') {
               done = true
               break
             }
-            // Parse JSON to extract token or output_text
-            let parsed
+            // Parse JSON payload
+            let parsed: any
             try {
-              parsed = JSON.parse(data)
+              parsed = JSON.parse(dataLine)
             } catch {
               continue
             }
-            const token = parsed.output_text ?? parsed.token ?? ''
-            assistantContent += token
-            setChatMessages(prev => prev.map(msg =>
-              msg.message.id === assistantMsgId
-                ? { ...msg, message: { ...msg.message, content: assistantContent } }
-                : msg
-            ))
+            // Handle OpenAI Responses streaming event types
+            let appendText = ''
+            if (typeof parsed?.delta === 'string' && typeof parsed?.type === 'string' && parsed.type.endsWith('.delta')) {
+              appendText = parsed.delta
+            } else if (parsed?.type === 'response.completed') {
+              done = true
+            } else if (typeof parsed?.output_text === 'string') {
+              appendText = parsed.output_text
+            } else if (typeof parsed?.token === 'string') {
+              appendText = parsed.token
+            }
+            if (appendText) {
+              assistantContent += appendText
+              setChatMessages(prev => prev.map(msg =>
+                msg.message.id === assistantMsgId
+                  ? { ...msg, message: { ...msg.message, content: assistantContent } }
+                  : msg
+              ))
+            }
           }
         }
       }
